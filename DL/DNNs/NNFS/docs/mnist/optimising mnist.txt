@@ -1,0 +1,5 @@
+Model1:
+	- Dense 16 
+		- sigmoid
+	- Dense 16 
+		- sigmoid

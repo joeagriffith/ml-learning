@@ -1,0 +1,16 @@
+Setup – create a population of n elements, each with randomly generated DNA
+Gen_pop(n, length) -> Vec<String>
+
+Selection – evaluate the fitness of each element of the population and build a mating pool.
+Fitness = difference from target string
+Create a vector of fitnesses, element by element relationship to population vec
+Calculate total of fitnessVec
+Mating pool = Vec with length population
+For each element in population, insert into mating pool  len(population) * fitness/fitness_total times.
+
+Reproduction – repeat N times
+-	Randomly pick two parents from mating pool
+-	Crossover the two parents, 50% chance for each char
+-	Mutation, 50% chance that a string has 1 random char
+-	Add new child to the new population
+REPEAT FORM SELECTION

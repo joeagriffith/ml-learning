@@ -1,0 +1,16 @@
+Features:
+	pclass - expect to see higher survival rate depending on class, 1 then 2 then 3.
+
+	sex - expect to see higher survival rate for females than males
+
+	age - 
+		expect to see higher survival rate the younger the age 
+		some are estimated (of form xx.5) does estimated/not impact survival rate?
+		from trial and error seems like age only makes a significance in question is_child_age 6 or below?
+		encoding age as a onehot in form [under_7, 7_or_over, unknown]
+	sibsp - interesting to see how this correlates with sex and age.
+	parch - interesting to see how this correlates with sex and age.
+	ticket - doubt any correlation on survival rate
+	fare - possibly correlates with higher survival rate, how does this compare with pclass
+	cabin - could impact survival rate, closer to lifeboats
+	embarked - doubt any correlation with survival rate.

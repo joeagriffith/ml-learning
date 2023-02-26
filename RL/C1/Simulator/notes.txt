@@ -1,0 +1,2 @@
+only need to recalculate path for mob if the destroyed structure is between the mob and it's target edge.
+i can use the equations of the edges, (the starting edge offset by the mob) to check whether the destroyed structure is between the mob and target edge.

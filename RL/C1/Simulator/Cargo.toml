@@ -1,0 +1,20 @@
+[package]
+name = "c1_terminal_simulator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "c1_term_sim"
+crate-type=["cdylib"]
+
+[dependencies]
+num-traits = "0.2.6"
+lazy_static = "1.4.0"
+enum-iterator = "0.8.1"
+rand = "0.8.1"
+
+[dependencies.pyo3]
+version = "0.16.5"
+features = ["extension-module"]

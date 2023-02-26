@@ -1,0 +1,218 @@
+Loading data...
+finished loading data.
+
+---Compiling Model---
+  Input layer, nodes: 784
+  Dense layer, nodes: 32
+  Dense layer, nodes: 32
+  Dense layer, nodes: 10
+
+Training via stochastic gradient descent with options:
+  epochs: 50
+  batch_size: 20
+  learning_rate: 0.1
+  error_func: CategoricalCrossEntropyError
+  l1_lambda: None
+  l2_lambda: None
+
+correct: 778/10000, accuracy: 7.7799997%
+epoch: 0
+epoch: 1/50 complete
+evaluating...
+correct: 4555/10000, accuracy: 45.55%
+epoch: 1
+epoch: 2/50 complete
+evaluating...
+correct: 6008/10000, accuracy: 60.079998%
+epoch: 2
+epoch: 3/50 complete
+evaluating...
+correct: 6678/10000, accuracy: 66.78%
+epoch: 3
+epoch: 4/50 complete
+evaluating...
+correct: 7054/10000, accuracy: 70.54%
+epoch: 4
+epoch: 5/50 complete
+evaluating...
+correct: 7373/10000, accuracy: 73.729996%
+epoch: 5
+epoch: 6/50 complete
+evaluating...
+correct: 7563/10000, accuracy: 75.63%
+epoch: 6
+epoch: 7/50 complete
+evaluating...
+correct: 7726/10000, accuracy: 77.26%
+epoch: 7
+epoch: 8/50 complete
+evaluating...
+correct: 7891/10000, accuracy: 78.909996%
+epoch: 8
+epoch: 9/50 complete
+evaluating...
+correct: 8030/10000, accuracy: 80.299995%
+epoch: 9
+epoch: 10/50 complete
+evaluating...
+correct: 8108/10000, accuracy: 81.08%
+epoch: 10
+epoch: 11/50 complete
+evaluating...
+correct: 8187/10000, accuracy: 81.87%
+epoch: 11
+epoch: 12/50 complete
+evaluating...
+correct: 8278/10000, accuracy: 82.78%
+epoch: 12
+epoch: 13/50 complete
+evaluating...
+correct: 8359/10000, accuracy: 83.590004%
+epoch: 13
+epoch: 14/50 complete
+evaluating...
+correct: 8410/10000, accuracy: 84.1%
+epoch: 14
+epoch: 15/50 complete
+evaluating...
+correct: 8454/10000, accuracy: 84.54%
+epoch: 15
+epoch: 16/50 complete
+evaluating...
+correct: 8490/10000, accuracy: 84.899994%
+epoch: 16
+epoch: 17/50 complete
+evaluating...
+correct: 8518/10000, accuracy: 85.18%
+epoch: 17
+epoch: 18/50 complete
+evaluating...
+correct: 8562/10000, accuracy: 85.619995%
+epoch: 18
+epoch: 19/50 complete
+evaluating...
+correct: 8586/10000, accuracy: 85.86%
+epoch: 19
+epoch: 20/50 complete
+evaluating...
+correct: 8625/10000, accuracy: 86.25%
+epoch: 20
+epoch: 21/50 complete
+evaluating...
+correct: 8660/10000, accuracy: 86.6%
+epoch: 21
+epoch: 22/50 complete
+evaluating...
+correct: 8678/10000, accuracy: 86.78%
+epoch: 22
+epoch: 23/50 complete
+evaluating...
+correct: 8712/10000, accuracy: 87.12%
+epoch: 23
+epoch: 24/50 complete
+evaluating...
+correct: 8740/10000, accuracy: 87.4%
+epoch: 24
+epoch: 25/50 complete
+evaluating...
+correct: 8768/10000, accuracy: 87.68%
+epoch: 25
+epoch: 26/50 complete
+evaluating...
+correct: 8785/10000, accuracy: 87.85%
+epoch: 26
+epoch: 27/50 complete
+evaluating...
+correct: 8801/10000, accuracy: 88.01%
+epoch: 27
+epoch: 28/50 complete
+evaluating...
+correct: 8826/10000, accuracy: 88.26%
+epoch: 28
+epoch: 29/50 complete
+evaluating...
+correct: 8839/10000, accuracy: 88.39%
+epoch: 29
+epoch: 30/50 complete
+evaluating...
+correct: 8858/10000, accuracy: 88.58%
+epoch: 30
+epoch: 31/50 complete
+evaluating...
+correct: 8869/10000, accuracy: 88.69%
+epoch: 31
+epoch: 32/50 complete
+evaluating...
+correct: 8885/10000, accuracy: 88.85%
+epoch: 32
+epoch: 33/50 complete
+evaluating...
+correct: 8897/10000, accuracy: 88.97%
+epoch: 33
+epoch: 34/50 complete
+evaluating...
+correct: 8912/10000, accuracy: 89.12%
+epoch: 34
+epoch: 35/50 complete
+evaluating...
+correct: 8914/10000, accuracy: 89.14%
+epoch: 35
+epoch: 36/50 complete
+evaluating...
+correct: 8931/10000, accuracy: 89.310005%
+epoch: 36
+epoch: 37/50 complete
+evaluating...
+correct: 8936/10000, accuracy: 89.36%
+epoch: 37
+epoch: 38/50 complete
+evaluating...
+correct: 8954/10000, accuracy: 89.54%
+epoch: 38
+epoch: 39/50 complete
+evaluating...
+correct: 8957/10000, accuracy: 89.57%
+epoch: 39
+epoch: 40/50 complete
+evaluating...
+correct: 8962/10000, accuracy: 89.62%
+epoch: 40
+epoch: 41/50 complete
+evaluating...
+correct: 8987/10000, accuracy: 89.87%
+epoch: 41
+epoch: 42/50 complete
+evaluating...
+correct: 8998/10000, accuracy: 89.98%
+epoch: 42
+epoch: 43/50 complete
+evaluating...
+correct: 9005/10000, accuracy: 90.05%
+epoch: 43
+epoch: 44/50 complete
+evaluating...
+correct: 9013/10000, accuracy: 90.130005%
+epoch: 44
+epoch: 45/50 complete
+evaluating...
+correct: 9009/10000, accuracy: 90.090004%
+epoch: 45
+epoch: 46/50 complete
+evaluating...
+correct: 9017/10000, accuracy: 90.17%
+epoch: 46
+epoch: 47/50 complete
+evaluating...
+correct: 9020/10000, accuracy: 90.200005%
+epoch: 47
+epoch: 48/50 complete
+evaluating...
+correct: 9033/10000, accuracy: 90.33%
+epoch: 48
+epoch: 49/50 complete
+evaluating...
+correct: 9041/10000, accuracy: 90.41%
+epoch: 49
+epoch: 50/50 complete
+evaluating...
+correct: 9041/10000, accuracy: 90.41%

@@ -16,6 +16,7 @@ class Sarsa():
         self.Q = np.zeros((env.observation_space.n, env.action_space.n))
 
     
+    #  Select action following epsilon-greedy policy
     def _select_action(self, state, k):
         if self.epsilon is None:
             if k == 0:
@@ -31,11 +32,13 @@ class Sarsa():
         return self.Q[state].argmax()
 
 
+    #  Calculates the policy by a greedy policy
     def _determine_policy(self):
         for state in range(self.env.observation_space.n):
             self.policy[state] = self.Q[state].argmax()
 
 
+    #  S - state, A - action, R - reward, S - state_1, A - action_1
     def train(self, num_episodes):
         for k in range(num_episodes):
             state = self.env.reset()
@@ -49,14 +52,16 @@ class Sarsa():
                     reward -= 0.2
 
                 action_1 = self._select_action(state_1, k)
+                #  Odd implementation of SARSA update formula
+                #  This is more indicative of an error
                 err = self.Q[state, action] - reward
+                #  Due to implementation of envs, we must make the condition that 'rewards after done = 0' explicit
                 if not done:
                     err -= self.gamma * self.Q[state_1, action_1]
                 self.Q[state, action] -= self.alpha*err
 
                 state = state_1
                 action = action_1
-            
         
         self._determine_policy()
 

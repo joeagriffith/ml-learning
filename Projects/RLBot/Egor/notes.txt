@@ -1,0 +1,11 @@
+Curriculum:
+    Until 60 ep_rew_mean
+    - RewardIfGrounded(ConstantReward()) 0.01
+    - VelocityReward() 0.025
+    - VelocityPlayerToBallReward() 0.05
+    - mmr_models 155986656
+    - models rl_model_195986656_steps
+    - cur1_exit_save
+
+    
+    

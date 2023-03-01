@@ -1,0 +1,34 @@
+One of the issues with deep networks is the vanishing gradient problem.
+
+Problem Hypothesis: 
+    - Deep networks are trained "Top-Down" as the gradients at later layers are more severe than at earlier ones.
+    - This means that early layers are trained conditionally on the state of higher levels. 
+    - Long-term maleffects of the vanishing gradient problem
+    - EITHER:
+        - the lower levels converge to Solution|Later_layers, and then gradients push both earlier and later layers into global optimum. SLOW
+        - OR networks is too heavily damaged by its early training to find a good solution
+    
+Solution Hypothesis:
+    - Dependant on hypothesis 1, a better training methadology can acheive a better or faster convergence by training layers 'bottom-up'.
+
+Bottom-up methadology:
+    If we train subsets of our model architecture we can ensure optimal feature extraction in lower layers.
+    These subsets are constructed iteratively, starting with JUST the first layer, adding subsequent layers after satisfactory convergence has been reached.
+
+    Satisfactory Convergence
+    "satisfactory convergence" can likely be quite a poor approximation, as later training will converge, AND maybe more "WIGGLE ROOM" is helpful.
+    
+    Freezing
+    there are two ways we could train these subsets, either freeze all lower layers other than the latest addition to the subset. or train them ALL
+
+    Loss Function:
+        1. We could maintain the loss methadology and attempt to classify input images using subsets of the network architecture.
+        This would require a custom classifier net for each subset we train.
+        However, this methadology may not be suitable for the final solution as the same layer may have different optimality in the different architectures of each subset.
+        2. We could increase our focus on feature extraction by attempting image decompasition and reconstruction from these network subsets.
+        This would require construction an inverse "Reconstruction Network" for each network subset.
+        Each network subset is trained similar to a AE, except the lowest level has wide dimensions HxW. (Possibly excluding final layer)
+
+
+
+If Both hypotheses are confirmed and a tractable algorithm is devised, This methadology could be applied to a wide range of DL paradigms, and propose a complete solution to the vanishing gradient problem.

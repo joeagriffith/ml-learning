@@ -34,3 +34,37 @@ def evaluate(model, data_loader, criterion, device="cpu", flatten=False):
         acc /= len(data_loader) 
 
         return loss, acc
+
+def evaluate_pc(model, data_loader, criterion, device="cpu", flatten=False):
+    with torch.no_grad():
+        model.eval()
+        
+        loss = 0.0
+        acc = torch.zeros(3)
+        err = 0.0
+        for batch_idx, (images, y) in enumerate(data_loader):
+            x = images.to(device)
+            if flatten:
+                x = torch.flatten(x, start_dim=1)
+            target = y.to(device)
+            out = model(x)
+            e_mag += out[1]
+            loss += criterion(out[0], target).item()
+            acc += torch.tensor(topk_accuracy(out[0], target, (1,3,5)))
+        
+        loss /= len(data_loader)
+        acc /= len(data_loader) 
+        err /= len(data_loader)
+
+        return loss, acc, err
+
+class RandomGaussianNoise(object):
+    def __init__(self, mean=0.0, std=0.001):
+        self.mean = mean
+        self.std = std
+    
+    def __call__(self, img):
+        noise = (torch.randn(img.shape) * self.std + self.mean)
+        if img.is_cuda:
+            noise = noise.to("cuda")
+        return torch.clip(img + noise, min=0.0, max=1.0)

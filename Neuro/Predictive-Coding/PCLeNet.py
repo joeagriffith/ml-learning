@@ -24,7 +24,7 @@ class PCLeNet(nn.Module):
             nn.ReLU(),
             nn.Linear(84, 10),
         )
-    
+
     def forward(self, x):
         batch_size = x.shape[0]
         device = "cuda" if x.is_cuda else "cpu"
@@ -49,4 +49,7 @@ class PCLeNet(nn.Module):
 
         out = self.classifier(r2)
 
-        return out
+        e_mag = e0.square().sum().item() + e1.square().sum().item() + e2.square().sum().item()
+        e_mag /= e0.numel() + e1.numel() + e2.numel()
+
+        return [out, e_mag]

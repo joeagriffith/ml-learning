@@ -36,7 +36,7 @@ class PCLayer(nn.Module):
         
         self.convT = nn.Sequential(
             nn.Upsample(scale_factor=maxpool),
-            nn.ConvTranspose2d(r_shape[0], e_shape[0], kernel, padding=1+padding//2, **kwargs),
+            nn.ConvTranspose2d(r_shape[0], e_shape[0], kernel, padding=padding, **kwargs),
             td_actv,
         )
 
@@ -44,11 +44,11 @@ class PCLayer(nn.Module):
             nn.Conv2d(r_shape[0], r_shape[0], (10,10), padding="same")
         )
     
-    def to(self, device):
-        self.conv = self.conv.to(device)
-        self.convT = self.convT.to(device)
-        self.rec_conv = self.rec_conv.to(device)
-        self.device = device
+    # def to(self, device):
+    #     self.conv = self.conv.to(device)
+    #     self.convT = self.convT.to(device)
+    #     self.rec_conv = self.rec_conv.to(device)
+    #     self.device = device
     
     def init_vars(self, batch_size):
         e = torch.zeros((batch_size, self.e_shape[0], self.e_shape[1], self.e_shape[2])).to(self.device)

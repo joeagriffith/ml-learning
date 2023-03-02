@@ -1,0 +1,3 @@
+Standard PC loss function, update weights as de/dw.
+weights are updated using the error node they are connected to as an error signal. 
+Training to minimise errors IS training to optimise feature extraction and input reconstruction.

@@ -115,9 +115,9 @@ class PCLeNetTidy(nn.Module):
 
         return [e0, e1, e2], [r0, r1, r2]
 
-    def hebbian_update(self, e, r, weight):
-        for i in range(len(e)):
-            forward_grad =
+    # def hebbian_update(self, e, r, weight):
+    #     for i in range(len(e)):
+    #         forward_grad =
 
     def forward(self, x):
         batch_size = x.shape[0]

@@ -11,21 +11,23 @@ def eval(
         model_params,
 ):
     loss = 0.0
-    model_params.append(True) # Unlock visible units during inference
-    for batch_idx, (images, y) in data_loader:
+    print(f'model_params at pre-eval: {model_params}')
+    # model_params.append(True) # Unlock visible units during inference
+    for batch_idx, (images, y) in enumerate(data_loader):
         images = images.flatten(start_dim=1)
         noised = add_salt_and_pepper_noise(images, p=0.1)
 
-        reconstruction = model(noised, *model_params)[0]
+        reconstruction = model(noised, *model_params, True)[0]
         loss += criterion(reconstruction, images)
     
-    loss /= len(data_loader)[0]
+    loss /= batch_idx+1
     return loss
 
 
 def train(
         model,
-        train_loader,
+        positive_dataloader,
+        negative_dataloader,
         eval_criterion,
         learning_rate=0.01,
         epochs=20,
@@ -41,22 +43,26 @@ def train(
     writer = SummaryWriter("Deep_Learning/Experimental/Boltzmann/mnist/out/logs")
 
     losses = []
-    loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
 
     for epoch in range(epochs):
+        loop = tqdm(enumerate(positive_dataloader), total=len(positive_dataloader), leave=False)
+
+        do_neg = epoch % neg_every == 0
+        if do_neg:
+            neg_it = iter(negative_dataloader)
 
         for batch_idx, (images, y) in loop:
             images = images.flatten(start_dim=1)
-            state = model(images, *model_params)
-            model.update(state, learning_rate)
 
-        # Negative phase, unlearn from random initialisation
-        if epoch % neg_every == 0:
-            state = model(None, *model_params)
-            model.update(state, learning_rate, True)
+            for phase in range(do_neg+1):
+                if phase == 1:
+                    images = next(neg_it)[0].flatten(start_dim=1)
+
+                state = model(images, *model_params)
+                model.update(state, learning_rate, phase==1)
 
         if epoch % eval_every == 0:
-            losses.append(eval(model, train_loader, eval_criterion, model_params))
+            losses.append(eval(model, positive_dataloader, eval_criterion, model_params))
             writer.add_scalar("Reconstruction Loss", losses[-1], step)
         
         step += len(images)

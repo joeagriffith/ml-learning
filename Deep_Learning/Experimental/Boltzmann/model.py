@@ -12,8 +12,8 @@ class FCBoltzmannModel(nn.Module):
     def __init__(self, input_size, output_size, hiddens=[]):
         super(FCBoltzmannModel, self).__init__()
 
-        in_features = input_size
-        out_features = output_size
+        self.in_features = input_size
+        self.out_features = output_size
         
         layers = []
         in_size = input_size
@@ -33,6 +33,9 @@ class FCBoltzmannModel(nn.Module):
                 x = torch.bernoulli(x)
             elif mode == "zeros":
                 x = torch.zeros((batch_size, self.in_features))
+        else:
+            batch_size = x.shape[0]
+        
         
         state = [x]
         for layer in self.layers:
@@ -45,20 +48,25 @@ class FCBoltzmannModel(nn.Module):
       
                 
     def _energy_gap(self, state, layer_i:int, node_i:int):
-        result = 0
+        result = torch.zeros(state[0].shape[0]) # batch_size
+
+        if layer_i > 0:
+            # print(f'state[layer_i-1].shape: {state[layer_i-1].shape}, self.layers[layer_i-1].weight.data[node_i,:].shape: {self.layers[layer_i-1].weight.data[node_i,:].shape}')
+            result += state[layer_i-1] @ self.layers[layer_i-1].weight.data[node_i,:] + self.layers[layer_i-1].bias.data[node_i]
 
         if layer_i < len(state)-1:
-            result += state[layer_i] @ self.layers[layer_i].weight.data[:,node_i]
+            # print(f'state[layer_i+1].shape: {state[layer_i+1].shape}, self.layers[layer_i].weight.data[:,node_i].shape: {self.layers[layer_i].weight.data[:,node_i].shape}')
+            result += state[layer_i+1] @ self.layers[layer_i].weight.data[:,node_i]
+
+        return result
         
-        if layer_i > 0:
-            result += self.layers[layer_i-1].weight.data[node_i,:] @ state[layer_i-1] + self.layers[layer_i-1].bias.data[node_i]
 
 
     def _update_node(self, state, layer_i:int, node_i:int, temperature=1.0):
         energy_gap = self._energy_gap(state, layer_i, node_i)
         p_1 = 1.0 / (1 + (-energy_gap/temperature).exp())
-        activation = 1.0 if p_1 > random.random() else 0.0
-        state[layer_i][node_i] = activation
+        activation = (p_1 > torch.rand(p_1.shape)).float()
+        state[layer_i][:,node_i] = activation
         return state
 
 
@@ -85,7 +93,7 @@ class FCBoltzmannModel(nn.Module):
                 # Ensures we clamp visible units in positive phase, and update during negative phase
                 if x is None or unlock_vis:
                     node_idxs = torch.arange(self.in_features, dtype=torch.int64).unsqueeze(1)
-                    layer_idxs = torch.tensor([1]).unsqueeze(1).repeat(node_idxs.shape)
+                    layer_idxs = torch.tensor([0]).unsqueeze(1).repeat(node_idxs.shape)
                     ids.append(torch.cat([layer_idxs, node_idxs], dim=1))
 
                 for i, layer in enumerate(self.layers):
@@ -125,7 +133,7 @@ class FCBoltzmannModel(nn.Module):
         if negative:
             correlations = [-1.0 * corr for corr in correlations]
         
-        for i, corr in correlations:
+        for i, corr in enumerate(correlations):
             self.layers[i].weight.data += lr*corr
 
 

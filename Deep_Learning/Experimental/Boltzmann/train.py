@@ -11,7 +11,6 @@ def eval(
         model_params,
 ):
     loss = 0.0
-    print(f'model_params at pre-eval: {model_params}')
     # model_params.append(True) # Unlock visible units during inference
     for batch_idx, (images, y) in enumerate(data_loader):
         images = images.flatten(start_dim=1)
@@ -44,14 +43,15 @@ def train(
 
     losses = []
 
-    for epoch in range(epochs):
-        loop = tqdm(enumerate(positive_dataloader), total=len(positive_dataloader), leave=False)
+    loop = tqdm(range(epochs), total=epochs, leave=False)
+    for epoch in loop:
+        # loop = tqdm(enumerate(positive_dataloader), total=len(positive_dataloader), leave=False)
 
         do_neg = epoch % neg_every == 0
         if do_neg:
             neg_it = iter(negative_dataloader)
 
-        for batch_idx, (images, y) in loop:
+        for batch_idx, (images, y) in enumerate(positive_dataloader):
             images = images.flatten(start_dim=1)
 
             for phase in range(do_neg+1):

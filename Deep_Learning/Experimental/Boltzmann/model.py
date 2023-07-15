@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
+import math
 
 # A Fully Connected Boltzmann Machine with activations of 0 and 1
 class FCBoltzmannModel(nn.Module):
@@ -62,30 +63,35 @@ class FCBoltzmannModel(nn.Module):
         
 
 
-    def _update_node(self, state, layer_i:int, node_i:int, temperature=1.0):
+    def _update_node(self, state, layer_i:int, node_i:int, temperature=1.0, debug=False):
         energy_gap = self._energy_gap(state, layer_i, node_i)
         p_1 = 1.0 / (1 + (-energy_gap/temperature).exp())
         activation = (p_1 > torch.rand(p_1.shape)).float()
+        updated = not torch.equal(state[layer_i][:,node_i], activation)
         state[layer_i][:,node_i] = activation
-        return state
+        if debug:
+            print(f'layer_i: {layer_i}, node_i: {node_i}, energy_gap: {energy_gap}, p_1: {p_1}, activation: {activation}, updated: {updated}')
+        return updated
 
 
-    def forward(self, x=None, steps=20, temp_range=(1.0, 5.0), replacement=False, unlock_vis=False):
+    def forward(self, x=None, max_steps=100, temp_coeffs=(2.0, 5.0), replacement=False, unlock_vis=False):
 
         state = self.init_state(x)
         
         # Build temperatures. linear decrease from max temp_range to min in temp range, over {steps} steps
-        grad = (temp_range[1] - temp_range[0]) / steps
-        intercept = temp_range[0]
-        temperature = lambda x : grad*(steps-x-1) + intercept
-        temperatures = [temperature(i) for i in range(steps)]
+        temperature = lambda x : temp_coeffs[0]/math.exp(x/temp_coeffs[1])
+        temperatures = [temperature(i) for i in range(max_steps)]
 
         # calc random each node
         # layer_i = random.randint(0, len(self.layers))
         # node_i = random.randint(0, self.layers[layer_i].out_features)
 
         # OR precalc order and shuffle. faster and ensures every node is updated
-        for step_i in range(steps):
+        # for step_i in range(steps):
+        thermal_eq = False
+        step_i = 0
+        while not thermal_eq:
+            thermal_eq = True
             ids = [] # list of (layer_i, node_i) for identifying unique units.
 
             # Randomly select units, without replacement
@@ -105,6 +111,7 @@ class FCBoltzmannModel(nn.Module):
             # Randomly select units, with replacement
             # TODO: handle visible units selection. Not when training
             else:
+                raise(NotImplementedError)
                 num_units = sum([layer.out_features for layer in self.layers]) + self.in_features
                 for _ in range(num_units):
                     layer_i = random.randint(0, len(state))
@@ -117,21 +124,29 @@ class FCBoltzmannModel(nn.Module):
 
             # update units in 'ids' order
             for layer_i, node_i in ids:
-                state = self._update_node(state, layer_i.item(), node_i.item(), temperatures[step_i])
-        
+                updated = self._update_node(state, layer_i.item(), node_i.item(), temperatures[step_i])
+                if updated:
+                    thermal_eq = False
+
+            if step_i >= max_steps-1:
+                print(f"Max steps reached: {max_steps}")
+                break
+
+            step_i += 1 
         return state
 
 
     def _correlations(self, state):
         out = []
         for i in range(len(state)-1):
-            out.append((state[i+1].t() @ state[i]) / len(state[i]))
+            correlation = (state[i+1].t() @ state[i]) / len(state[i])
+            out.append(correlation)
         return out
     
     def update(self, state, lr=0.1, negative=False):
         correlations = self._correlations(state)
         if negative:
-            correlations = [-1.0 * corr for corr in correlations]
+            lr *= -1
         
         for i, corr in enumerate(correlations):
             self.layers[i].weight.data += lr*corr

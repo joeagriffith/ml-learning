@@ -9,7 +9,7 @@ Problem Hypothesis:
         - OR networks is too heavily damaged by its early training to find a good solution
     
 Solution Hypothesis:
-    - Dependant on hypothesis 1, a better training methodology can acheive a better or faster convergence by training layers 'bottom-up'.
+    - Dependant on hypothesis 1, a "bottom-up" training methodology can acheive a better solution.
 
 Bottom-up methadology:
     If we train subsets of our model architecture we can ensure optimal feature extraction in lower layers.
@@ -25,10 +25,13 @@ Bottom-up methadology:
         1. We could maintain the loss methodology and attempt to classify input images using subsets of the network architecture.
         This would require a custom classifier net for each subset we train.
         However, this methodology may not be suitable for the final solution as the same layer may have different optimality in the different architectures of each subset.
-        2. We could increase our focus on feature extraction by attempting image decompasition and reconstruction from these network subsets.
+        2. We could increase our focus on feature extraction by attempting image decomposition and reconstruction from these network subsets.
         This would require construction an inverse "Reconstruction Network" for each network subset.
-        Each network subset is trained similar to a AE, except the lowest level has wide dimensions HxW. (Possibly excluding final layer)
+        Each network subset is trained similar to a AE, except the lowest level has wide spatial dimensions HxW when training earlier layers. (Possibly excluding final layer)
 
 
 
 If Both hypotheses are confirmed and a tractable algorithm is devised, This methodology could be applied to a wide range of DL paradigms, and propose a complete solution to the vanishing gradient problem.
+
+Should be compared against skip connections.
+

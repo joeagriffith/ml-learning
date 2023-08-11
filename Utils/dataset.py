@@ -72,7 +72,8 @@ class PreloadedDataset(Dataset):
         targets = []
         for i in tqdm(range(len(dataset)), leave=False):
             d, t = dataset.__getitem__(i)
-            t = torch.tensor(t)
+            if type(t) is not torch.Tensor:
+                t = torch.tensor(t)
             data.append(d)
             targets.append(t)
             

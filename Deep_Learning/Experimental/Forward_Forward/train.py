@@ -16,10 +16,7 @@ def unsupervised(
     batch_size=256,
     mode='minimise',
     loss='log',
-    layer_losses=None,
-    layer_val_losses=None,
-    layer_diffs=None,
-    layer_val_diffs=None,
+    tracker=None,
 ):
 
     if type(epochs) == int:
@@ -34,11 +31,12 @@ def unsupervised(
     elif loss == 'log':
         loss_fn = log_loss
 
-    # Loss trackers, one for each layer. [layer_i][epoch]
-    if layer_losses is None: layer_losses = [[] for layer in model.layers]
-    if layer_val_losses is None: layer_val_losses = [[] for layer in model.layers]
-    if layer_diffs is None: layer_diffs = [[] for layer in model.layers]
-    if layer_val_diffs is None: layer_val_diffs = [[] for layer in model.layers]
+    tracker = {
+        "layer_losses": [[] for layer in model.layers],
+        "layer_val_losses": [[] for layer in model.layers],
+        "layer_diffs": [[] for layer in model.layers],
+        "layer_val_diffs": [[] for layer in model.layers],
+    }
 
     for layer_i in range(len(model.layers)):
 
@@ -57,10 +55,10 @@ def unsupervised(
                 loop.set_description(
                     f"Epoch {ep+1}/{epochs[layer_i]} - "
                     f"Layer {layer_i}/{len(epochs)-1} - "
-                    f"Loss: {layer_losses[layer_i][-1]:.4f} - "
-                    f"Val Loss: {layer_val_losses[layer_i][-1]:.4f} - "
-                    f"Diff Logits: {layer_diffs[layer_i][-1]:.4f} - "
-                    f"Val Diff Logits: {layer_val_diffs[layer_i][-1]:.4f}"
+                    f"Loss: {tracker['layer_losses'][layer_i][-1]:.4f} - "
+                    f"Val Loss: {tracker['layer_val_losses'][layer_i][-1]:.4f} - "
+                    f"Diff Logits: {tracker['layer_diffs'][layer_i][-1]:.4f} - "
+                    f"Val Diff Logits: {tracker['layer_val_diffs'][layer_i][-1]:.4f}"
                 )
 
             # Train Pass
@@ -92,8 +90,8 @@ def unsupervised(
                 epoch_loss += loss.item()
                 epoch_diffs += diffs.item()
 
-            layer_losses[layer_i].append(epoch_loss / len(pos_dataloader))
-            layer_diffs[layer_i].append(epoch_diffs / len(pos_dataloader))
+            tracker['layer_losses'][layer_i].append(epoch_loss / len(pos_dataloader))
+            tracker['layer_diffs'][layer_i].append(epoch_diffs / len(pos_dataloader))
             
             # Validation Pass
             epoch_val_loss = 0
@@ -120,10 +118,10 @@ def unsupervised(
                 epoch_val_loss += val_loss.item()
                 epoch_val_diffs += diffs.item()
             
-            layer_val_losses[layer_i].append(epoch_val_loss / len(val_pos_dataloader))
-            layer_val_diffs[layer_i].append(epoch_val_diffs / len(val_pos_dataloader))
+            tracker['layer_val_losses'][layer_i].append(epoch_val_loss / len(val_pos_dataloader))
+            tracker['layer_val_diffs'][layer_i].append(epoch_val_diffs / len(val_pos_dataloader))
 
-    return layer_losses, layer_val_losses, layer_diffs, layer_val_diffs
+    return tracker
 
 
 def unsupervised_tracked(
@@ -137,16 +135,7 @@ def unsupervised_tracked(
     batch_size=256,
     mode='minimise',
     loss='log',
-    layer_losses=None,
-    layer_val_losses=None,
-    layer_diffs=None,
-    layer_val_diffs=None,
-    actvs=None, # [pos_actv, neg_actv, val_pos_actv, val_neg_actv]
-    norms=None, # [pos_norm, neg_norm, val_pos_norm, val_neg_norm]
-    weights=None,
-    biases=None,
-    steps=None,
-    device="cpu",
+    tracker=None,
 ):
 
     if type(epochs) == int:
@@ -160,24 +149,19 @@ def unsupervised_tracked(
         loss_fn = prob_loss
     elif loss == 'log':
         loss_fn = log_loss
-    
-    # Loss trackers, one for each layer. [layer_i][epoch]
-    if layer_losses is None: layer_losses = [[] for layer in model.layers]
-    if layer_val_losses is None: layer_val_losses = [[] for layer in model.layers]
-    if layer_diffs is None: layer_diffs = [[] for layer in model.layers]
-    if layer_val_diffs is None: layer_val_diffs = [[] for layer in model.layers]
 
-    # activation, norm and parameter trackers
-    if actvs is None:
-        actvs = [[[] for layer in model.layers] for _ in range(4)] # actvs[pos/neg/val_pos/val_neg][layer_i][epoch]
-    if norms is None:
-        norms = [[[] for layer in model.layers] for _ in range(4)] # norms[pos/neg/val_pos/val_neg][layer_i][epoch]
-    if weights is None:
-        weights = [[] for layer in model.layers] # weights[layer_i][epoch]
-        biases = [[] for layer in model.layers] # biases[layer_i][epoch]
-    if steps is None:
-        steps = [0 for layer in model.layers] # epochs
-    
+    if tracker is None:
+        tracker = {
+            "layer_losses": [[] for layer in model.layers],
+            "layer_val_losses": [[] for layer in model.layers],
+            "layer_diffs": [[] for layer in model.layers],
+            "layer_val_diffs": [[] for layer in model.layers],
+            "actvs": [[[] for layer in model.layers] for _ in range(4)],
+            "norms": [[[] for layer in model.layers] for _ in range(4)],
+            "weights": [[] for layer in model.layers],
+            "biases": [[] for layer in model.layers],
+            "steps": [0 for layer in model.layers],
+        }
 
     # Learning Loop. For each layer, for each epoch, for each batch, perform a positive pass and a negative pass.
     for layer_i in range(len(model.layers)):
@@ -197,16 +181,19 @@ def unsupervised_tracked(
                 loop.set_description(
                     f"Epoch {ep+1}/{epochs[layer_i]} - "
                     f"Layer {layer_i}/{len(epochs)-1} - "
-                    f"Loss: {layer_losses[layer_i][-1]:.3f} - "
-                    f"Mean Norms (pos/neg): {norms[0][layer_i][-1].item():.3f} / {norms[1][layer_i][-1].item():.3f}")
+                    f"Loss: {tracker['layer_losses'][layer_i][-1]:.4f} - "
+                    f"Val Loss: {tracker['layer_val_losses'][layer_i][-1]:.4f} - "
+                    f"Diff Logits: {tracker['layer_diffs'][layer_i][-1]:.4f} - "
+                    f"Val Diff Logits: {tracker['layer_val_diffs'][layer_i][-1]:.4f}"
+                )
 
             # Initialise batch trackers
             epoch_loss = 0 
             epoch_diffs = 0
-            batches_pos_actv_total = torch.zeros((model.layers[layer_i].out_features)).to(device)
-            batches_neg_actv_total = torch.zeros((model.layers[layer_i].out_features)).to(device)
-            batches_pos_norm_total = torch.zeros((1)).to(device)
-            batches_neg_norm_total = torch.zeros((1)).to(device)
+            batches_pos_actv_total = torch.zeros((model.layers[layer_i].out_features))
+            batches_neg_actv_total = torch.zeros((model.layers[layer_i].out_features))
+            batches_pos_norm_total = 0
+            batches_neg_norm_total = 0
             model.train()
             for batch_i, (x, y) in loop:
 
@@ -217,8 +204,8 @@ def unsupervised_tracked(
                         x = F.normalize(model.layers[i](x))
                 pos_actvs = model.layers[layer_i](x.detach())
                 # Track activations and norms
-                batches_pos_actv_total += pos_actvs.detach().sum(dim=0)
-                batches_pos_norm_total += pos_actvs.detach().norm(dim=1).sum()
+                batches_pos_actv_total += pos_actvs.detach().sum(dim=0).cpu()
+                batches_pos_norm_total += pos_actvs.detach().norm(dim=1).sum().item()
             
                 # Negative Pass
                 with torch.no_grad():
@@ -228,8 +215,8 @@ def unsupervised_tracked(
                         x = F.normalize(model.layers[i](x))
                 neg_actvs = model.layers[layer_i](x.detach())
                 # Track activations and norms
-                batches_neg_actv_total += neg_actvs.detach().sum(dim=0)
-                batches_neg_norm_total += neg_actvs.detach().norm(dim=1).sum()
+                batches_neg_actv_total += neg_actvs.detach().sum(dim=0).cpu()
+                batches_neg_norm_total += neg_actvs.detach().norm(dim=1).sum().item()
 
                 optimiser.zero_grad()
                 loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
@@ -239,24 +226,24 @@ def unsupervised_tracked(
                 epoch_diffs += diffs.item()
 
             # Track epochs
-            layer_losses[layer_i].append(epoch_loss / len(pos_dataloader))
-            layer_diffs[layer_i].append(epoch_diffs / len(pos_dataloader))
-            actvs[0][layer_i].append(batches_pos_actv_total / len(pos_dataset))
-            actvs[1][layer_i].append(batches_neg_actv_total / len(pos_dataset))
-            norms[0][layer_i].append(batches_pos_norm_total / len(pos_dataset))
-            norms[1][layer_i].append(batches_neg_norm_total / len(pos_dataset))
-            weights[layer_i].append(model.layers[layer_i].layer.weight.data.clone())
+            tracker['layer_losses'][layer_i].append(epoch_loss / len(pos_dataloader))
+            tracker['layer_diffs'][layer_i].append(epoch_diffs / len(pos_dataloader))
+            tracker['actvs'][0][layer_i].append(batches_pos_actv_total / len(pos_dataset))
+            tracker['actvs'][1][layer_i].append(batches_neg_actv_total / len(pos_dataset))
+            tracker['norms'][0][layer_i].append(batches_pos_norm_total / len(pos_dataset))
+            tracker['norms'][1][layer_i].append(batches_neg_norm_total / len(pos_dataset))
+            tracker['weights'][layer_i].append(model.layers[layer_i].layer.weight.data.cpu().clone())
             if model.layers[layer_i].bias is not None:
-                biases[layer_i].append(model.layers[layer_i].layer.bias.data.clone())
-            steps[layer_i] += len(pos_dataset)
+                tracker['biases'][layer_i].append(model.layers[layer_i].layer.bias.data.cpu().clone())
+            tracker['steps'][layer_i] += len(pos_dataset)
             
             # Validation Pass
             epoch_val_loss = 0
             epoch_val_diffs = 0
-            batches_val_pos_actv_total = torch.zeros((model.layers[layer_i].out_features)).to(device)
-            batches_val_neg_actv_total = torch.zeros((model.layers[layer_i].out_features)).to(device)
-            batches_val_pos_norm_total = torch.zeros((1)).to(device)
-            batches_val_neg_norm_total = torch.zeros((1)).to(device)
+            batches_val_pos_actv_total = torch.zeros((model.layers[layer_i].out_features))
+            batches_val_neg_actv_total = torch.zeros((model.layers[layer_i].out_features))
+            batches_val_pos_norm_total = 0
+            batches_val_neg_norm_total = 0
             model.eval()
             for batch_i, (x, y) in enumerate(val_pos_dataloader):
                 with torch.no_grad():
@@ -265,8 +252,8 @@ def unsupervised_tracked(
                         x = F.normalize(model.layers[i](x))
                 pos_actvs = model.layers[layer_i](x.detach())
                 # Track activations and norms
-                batches_val_pos_actv_total += pos_actvs.sum(dim=0)
-                batches_val_pos_norm_total += pos_actvs.norm(dim=1).sum()
+                batches_val_pos_actv_total += pos_actvs.detach().sum(dim=0).cpu()
+                batches_val_pos_norm_total += pos_actvs.detach().norm(dim=1).sum().item()
             
                 # Negative Pass
                 with torch.no_grad():
@@ -276,19 +263,19 @@ def unsupervised_tracked(
                         x = F.normalize(model.layers[i](x))
                 neg_actvs = model.layers[layer_i](x.detach())
                 # Track activations and norms
-                batches_val_neg_actv_total += neg_actvs.sum(dim=0)
-                batches_val_neg_norm_total += neg_actvs.norm(dim=1).sum()
+                batches_val_neg_actv_total += neg_actvs.detach().sum(dim=0).cpu()
+                batches_val_neg_norm_total += neg_actvs.detach().norm(dim=1).sum().item()
 
                 val_loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
                 epoch_val_loss += val_loss.item()
                 epoch_val_diffs += diffs.item()
 
             # Track mean activations and norms over epochs
-            layer_val_losses[layer_i].append(epoch_val_loss / len(val_pos_dataloader))
-            layer_val_diffs[layer_i].append(epoch_val_diffs / len(val_pos_dataloader))
-            actvs[2][layer_i].append(batches_val_pos_actv_total / len(val_pos_dataset))
-            actvs[3][layer_i].append(batches_val_neg_actv_total / len(val_pos_dataset))
-            norms[2][layer_i].append(batches_val_pos_norm_total / len(val_pos_dataset))
-            norms[3][layer_i].append(batches_val_neg_norm_total / len(val_pos_dataset))
+            tracker['layer_val_losses'][layer_i].append(epoch_val_loss / len(val_pos_dataloader))
+            tracker['layer_val_diffs'][layer_i].append(epoch_val_diffs / len(val_pos_dataloader))
+            tracker['actvs'][2][layer_i].append(batches_val_pos_actv_total / len(val_pos_dataset))
+            tracker['actvs'][3][layer_i].append(batches_val_neg_actv_total / len(val_pos_dataset))
+            tracker['norms'][2][layer_i].append(batches_val_pos_norm_total / len(val_pos_dataset))
+            tracker['norms'][3][layer_i].append(batches_val_neg_norm_total / len(val_pos_dataset))
 
-    return layer_losses, layer_val_losses, layer_diffs, layer_val_diffs, actvs, norms, weights, biases, steps
+    return tracker

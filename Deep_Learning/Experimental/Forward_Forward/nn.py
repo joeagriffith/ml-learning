@@ -16,7 +16,7 @@ class ReLU_full_grad(torch.autograd.Function):
         return grad_output.clone()
 
 class FFLayer(nn.Module):
-    def __init__(self, in_features, out_features, activation_fn=ReLU_full_grad, threshold=2.0, bias=True, device=torch.device('cpu'), dtype=torch.float32):
+    def __init__(self, in_features, out_features, activation_fn, threshold=2.0, bias=True, device=torch.device('cpu'), dtype=torch.float32):
         super(FFLayer, self).__init__()
         self.linear = nn.Linear(in_features, out_features, bias, device, dtype)
         self.in_features = in_features
@@ -28,30 +28,36 @@ class FFLayer(nn.Module):
         self.dtype = dtype
 
     def forward(self, x):
-        x = self.activation_fn(self.linear(x))
+        x = self.activation_fn.apply(self.linear(x))
         return x
 
 
 class FFNet(nn.Module):
-    def __init__(self, sizes, activation_fn=torch.relu, dropout=0.0, bias=True, threshold=2.0, device=torch.device('cpu'), dtype=torch.float32):
+    def __init__(self, sizes, activation_fn=ReLU_full_grad(), threshold=2.0, bias=True, device=torch.device('cpu'), dtype=torch.float32):
         super(FFNet, self).__init__()
         self.device = device
         self.dtype = dtype
-        self.dropout = nn.Dropout(dropout)
-        self.layers = nn.ModuleList([FFLayer(sizes[i], sizes[i+1], activation_fn, bias=bias, threshold=threshold, device=device, dtype=dtype) for i in range(len(sizes)-1)])
+        self.layers = nn.ModuleList([FFLayer(sizes[i], sizes[i+1], activation_fn, threshold=threshold, bias=bias, device=device, dtype=dtype) for i in range(len(sizes)-1)])
+        self.classifier = nn.Linear(sum(sizes[2:]), 10, bias=False, device=device, dtype=dtype)
         self._init_weights()
+        self._init_classifier()
     
     # Initialisations derived from loeweX @ https://github.com/loeweX/Forward-Forward/blob/main/src/ff_model.py
     def _init_weights(self):
         for layer in self.layers:
             nn.init.normal_(layer.linear.weight, mean=0, std=1/math.sqrt(layer.out_features))
             nn.init.zeros_(layer.linear.bias)
+    
+    def _init_classifier(self):
+        nn.init.zeros_(self.classifier.weight)
 
-    # Returns list of normalised output from each layer
     def forward(self, x):
-        outs = []
-        for layer in self.layers:
-            x = self.dropout(F.normalize(layer(x)))
-            outs.append(x)
-        return outs
+        with torch.no_grad():
+            outs = []
+            for layer in self.layers:
+                x = F.normalize(layer(x))
+                outs.append(x)
+            outs = torch.cat(outs[1:], dim=1)
+        out = self.classifier(outs)
+        return out
     

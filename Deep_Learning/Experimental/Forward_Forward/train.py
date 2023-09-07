@@ -5,7 +5,7 @@ from tqdm import tqdm
 from Deep_Learning.Experimental.Forward_Forward.utils import goodness_loss, prob_loss, log_loss, bce_loss
 
 
-def unsupervised(
+def train_unsupervised(
     model,
     lr,
     weight_decay,
@@ -108,7 +108,7 @@ def unsupervised(
                     x = x.flatten(start_dim=1)
                     for i in range(layer_i):
                         x = F.normalize(model.layers[i](x))
-                pos_actvs = model.layers[layer_i](x)
+                    pos_actvs = model.layers[layer_i](x)
             
                 # Negative Pass
                 with torch.no_grad():
@@ -116,11 +116,11 @@ def unsupervised(
                     x = x.flatten(start_dim=1)
                     for i in range(layer_i):
                         x = F.normalize(model.layers[i](x))
-                neg_actvs = model.layers[layer_i](x)
+                    neg_actvs = model.layers[layer_i](x)
                 
-                val_loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
-                epoch_val_loss += val_loss.item()
-                epoch_val_diffs += diffs.item()
+                    val_loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
+                    epoch_val_loss += val_loss.item()
+                    epoch_val_diffs += diffs.item()
             
             tracker['layer_val_losses'][layer_i].append(epoch_val_loss / len(val_pos_dataloader))
             tracker['layer_val_diffs'][layer_i].append(epoch_val_diffs / len(val_pos_dataloader))
@@ -128,7 +128,7 @@ def unsupervised(
     return tracker
 
 
-def unsupervised_tracked(
+def train_unsupervised_tracked(
     model,
     lr,
     weight_decay,
@@ -260,10 +260,10 @@ def unsupervised_tracked(
                     x = x.flatten(start_dim=1)
                     for i in range(layer_i):
                         x = F.normalize(model.layers[i](x))
-                pos_actvs = model.layers[layer_i](x.detach())
-                # Track activations and norms
-                batches_val_pos_actv_total += pos_actvs.detach().sum(dim=0).cpu()
-                batches_val_pos_norm_total += pos_actvs.detach().norm(dim=1).sum().item()
+                    pos_actvs = model.layers[layer_i](x)
+                    # Track activations and norms
+                    batches_val_pos_actv_total += pos_actvs.sum(dim=0).cpu()
+                    batches_val_pos_norm_total += pos_actvs.norm(dim=1).sum().item()
             
                 # Negative Pass
                 with torch.no_grad():
@@ -271,14 +271,14 @@ def unsupervised_tracked(
                     x = x.flatten(start_dim=1)
                     for i in range(layer_i):
                         x = F.normalize(model.layers[i](x))
-                neg_actvs = model.layers[layer_i](x.detach())
-                # Track activations and norms
-                batches_val_neg_actv_total += neg_actvs.detach().sum(dim=0).cpu()
-                batches_val_neg_norm_total += neg_actvs.detach().norm(dim=1).sum().item()
+                    neg_actvs = model.layers[layer_i](x)
+                    # Track activations and norms
+                    batches_val_neg_actv_total += neg_actvs.sum(dim=0).cpu()
+                    batches_val_neg_norm_total += neg_actvs.norm(dim=1).sum().item()
 
-                val_loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
-                epoch_val_loss += val_loss.item()
-                epoch_val_diffs += diffs.item()
+                    val_loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
+                    epoch_val_loss += val_loss.item()
+                    epoch_val_diffs += diffs.item()
 
             # Track mean activations and norms over epochs
             tracker['layer_val_losses'][layer_i].append(epoch_val_loss / len(val_pos_dataloader))
@@ -289,3 +289,70 @@ def unsupervised_tracked(
             tracker['norms'][3][layer_i].append(batches_val_neg_norm_total / len(val_pos_dataset))
 
     return tracker
+
+
+def train_classifier(
+    model,
+    train_dataset, 
+    val_dataset, 
+    epochs, 
+    batch_size,
+    optimiser, 
+    criterion, 
+    stats,
+):
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    if stats is None:
+        stats = {
+            'train_loss': [],
+            'train_acc': [],
+            'val_loss': [],
+            'val_acc': [],
+            'steps': [],
+        }
+
+    for epoch in range(epochs):
+        model.train()
+        running_loss = 0.0
+        correct = 0
+        loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
+        if epoch > 0:
+            loop.set_description(f"Epoch {epoch}")
+            loop.set_postfix(train_loss=stats['train_loss'][-1], train_acc=stats['train_acc'][-1], val_loss=stats['val_loss'][-1], val_acc=stats['val_acc'][-1])
+        for i, data in loop:
+            x, y = data
+            optimiser.zero_grad()
+            y_pred = model(x.flatten(start_dim=1))
+            y_pred = y_pred - torch.max(y_pred, dim=1, keepdim=True)[0] # normalisation for numerical stability
+            loss = criterion(y_pred, y)
+            loss.backward()
+            optimiser.step()
+            running_loss += loss.item()
+
+            _, predicted = torch.max(y_pred, 1)
+            correct += (predicted == y).sum().item()
+
+        stats['train_loss'].append(running_loss / len(train_loader))
+        stats['train_acc'].append(correct / len(train_dataset))
+        if len(stats['steps']) > 0:
+            stats['steps'].append(stats['steps'][-1] + len(train_dataset))
+        else:
+            stats['steps'].append(len(train_dataset))
+
+        model.eval()
+        running_loss = 0.0
+        correct = 0
+        for i, data in enumerate(val_loader):
+            x, y = data
+            y_pred = model(x.flatten(start_dim=1))
+            y_pred = y_pred - torch.max(y_pred, dim=1, keepdim=True)[0] # normalisation for numerical stability
+            loss = criterion(y_pred, y)
+            running_loss += loss.item()
+
+            _, predicted = torch.max(y_pred, 1)
+            correct += (predicted == y).sum().item()
+        stats['val_loss'].append(running_loss / len(val_loader))
+        stats['val_acc'].append(correct / len(val_dataset))
+
+    return stats

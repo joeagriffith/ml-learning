@@ -2,12 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from Deep_Learning.Experimental.Forward_Forward.utils import goodness_loss, prob_loss, log_loss
+from Deep_Learning.Experimental.Forward_Forward.utils import goodness_loss, prob_loss, log_loss, bce_loss
 
 
 def unsupervised(
     model,
     lr,
+    weight_decay,
     pos_dataset,
     neg_dataset,
     val_pos_dataset,
@@ -22,7 +23,7 @@ def unsupervised(
     if type(epochs) == int:
         epochs = [epochs for layer in model.layers]
     assert mode in ['minimise', 'maximise'], "Mode must be either 'minimise' or 'maximise'"
-    assert loss in ['goodness', 'prob', 'log'], "Loss must be either 'goodness', 'prob' or 'log'"
+    assert loss in ['goodness', 'prob', 'log', 'bce'], "Loss must be either 'goodness', 'prob', 'log' or 'bce'"
 
     if loss == 'goodness':
         loss_fn = goodness_loss
@@ -30,6 +31,8 @@ def unsupervised(
         loss_fn = prob_loss
     elif loss == 'log':
         loss_fn = log_loss
+    elif loss == 'bce':
+        loss_fn = bce_loss
 
     tracker = {
         "layer_losses": [[] for layer in model.layers],
@@ -40,10 +43,11 @@ def unsupervised(
 
     for layer_i in range(len(model.layers)):
 
-        optimiser = torch.optim.AdamW(model.layers[layer_i].parameters(), lr=lr, weight_decay=0.1)
+        optimiser = torch.optim.AdamW(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay)
 
         for ep in range(epochs[layer_i]):
             # Set up dataloaders and tqdm
+            pos_dataset.apply_transform()
             pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=True)
             neg_dataset.apply_transform()
             neg_dataloader = iter(DataLoader(neg_dataset, batch_size=batch_size, shuffle=True))
@@ -127,6 +131,7 @@ def unsupervised(
 def unsupervised_tracked(
     model,
     lr,
+    weight_decay,
     pos_dataset,
     neg_dataset,
     val_pos_dataset,
@@ -141,7 +146,7 @@ def unsupervised_tracked(
     if type(epochs) == int:
         epochs = [epochs for layer in model.layers]
     assert mode in ['minimise', 'maximise'], "Mode must be either 'minimise' or 'maximise'"
-    assert loss in ['goodness', 'prob', 'log'], "Loss must be either 'goodness', 'prob' or 'log'"
+    assert loss in ['goodness', 'prob', 'log', 'bce'], "Loss must be either 'goodness', 'prob',  'log' or 'bce'"
 
     if loss == 'goodness':
         loss_fn = goodness_loss
@@ -149,6 +154,9 @@ def unsupervised_tracked(
         loss_fn = prob_loss
     elif loss == 'log':
         loss_fn = log_loss
+    elif loss == 'bce':
+        loss_fn = bce_loss
+
 
     if tracker is None:
         tracker = {
@@ -166,10 +174,12 @@ def unsupervised_tracked(
     # Learning Loop. For each layer, for each epoch, for each batch, perform a positive pass and a negative pass.
     for layer_i in range(len(model.layers)):
 
-        optimiser = torch.optim.AdamW(model.layers[layer_i].parameters(), lr=lr, weight_decay=0.1)
+        # optimiser = torch.optim.AdamW(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay)
+        optimiser = torch.optim.SGD(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
 
         for ep in range(epochs[layer_i]):
             # Set up dataloaders and tqdm
+            pos_dataset.apply_transform()
             pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=True)
             neg_dataset.apply_transform()
             neg_dataloader = iter(DataLoader(neg_dataset, batch_size=batch_size, shuffle=True))
@@ -232,9 +242,9 @@ def unsupervised_tracked(
             tracker['actvs'][1][layer_i].append(batches_neg_actv_total / len(pos_dataset))
             tracker['norms'][0][layer_i].append(batches_pos_norm_total / len(pos_dataset))
             tracker['norms'][1][layer_i].append(batches_neg_norm_total / len(pos_dataset))
-            tracker['weights'][layer_i].append(model.layers[layer_i].layer.weight.data.cpu().clone())
-            if model.layers[layer_i].bias is not None:
-                tracker['biases'][layer_i].append(model.layers[layer_i].layer.bias.data.cpu().clone())
+            tracker['weights'][layer_i].append(model.layers[layer_i].linear.weight.data.cpu().clone())
+            if model.layers[layer_i].bias:
+                tracker['biases'][layer_i].append(model.layers[layer_i].linear.bias.data.cpu().clone())
             tracker['steps'][layer_i] += len(pos_dataset)
             
             # Validation Pass

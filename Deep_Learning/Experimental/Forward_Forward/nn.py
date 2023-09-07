@@ -16,16 +16,31 @@ class ReLU_full_grad(torch.autograd.Function):
         return grad_output.clone()
 
 class FFLayer(nn.Module):
-    def __init__(self, in_features, out_features, activation_fn, threshold=2.0, bias=True, device=torch.device('cpu'), dtype=torch.float32):
+    def __init__(self, in_features, out_features, activation_fn, threshold=2.0, momentum=0.9, bias=True, device=torch.device('cpu'), dtype=torch.float32):
         super(FFLayer, self).__init__()
         self.linear = nn.Linear(in_features, out_features, bias, device, dtype)
         self.in_features = in_features
         self.out_features = out_features
         self.activation_fn = activation_fn
         self.threshold = threshold
+        self.momentum = momentum
+        self.running_mean = torch.zeros(out_features, device=device, dtype=dtype) + 0.5
         self.bias = bias
         self.device = device
         self.dtype = dtype
+
+    # Inspired by loeweX @ https://github.com/loeweX/Forward-Forward/blob/92c0c1c0565063dae0121734075013cab20da5c5/src/ff_model.py#L60
+    def calc_peer_norm_loss(self, x):
+        # Update running mean
+        with torch.no_grad():
+            mean_activity = torch.mean(x, dim=0)
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean_activity
+
+        # Calculate loss
+        peer_loss = (self.running_mean - torch.mean(self.running_mean)) ** 2
+
+        return torch.mean(peer_loss)
+
 
     def forward(self, x):
         x = self.activation_fn.apply(self.linear(x))

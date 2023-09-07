@@ -39,6 +39,7 @@ def train_unsupervised(
         "layer_val_losses": [[] for layer in model.layers],
         "layer_diffs": [[] for layer in model.layers],
         "layer_val_diffs": [[] for layer in model.layers],
+        "layer_peer_losses": [[] for layer in model.layers],
     }
 
     for layer_i in range(len(model.layers)):
@@ -68,6 +69,7 @@ def train_unsupervised(
             # Train Pass
             epoch_loss = 0 
             epoch_diffs = 0
+            epoch_peer_loss = 0
             model.train()
             for batch_i, (x, y) in loop:
                 
@@ -88,14 +90,18 @@ def train_unsupervised(
 
                 optimiser.zero_grad()
                 loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode=mode)
+                peer_loss = model.layers[layer_i].calc_peer_norm_loss(pos_actvs)
+                loss += 0.03 * peer_loss
                 loss.backward()
                 optimiser.step()
 
                 epoch_loss += loss.item()
                 epoch_diffs += diffs.item()
+                epoch_peer_loss += peer_loss.item()
 
             tracker['layer_losses'][layer_i].append(epoch_loss / len(pos_dataloader))
             tracker['layer_diffs'][layer_i].append(epoch_diffs / len(pos_dataloader))
+            tracker['layer_peer_losses'][layer_i].append(epoch_peer_loss / len(pos_dataloader))
             
             # Validation Pass
             epoch_val_loss = 0
@@ -164,6 +170,7 @@ def train_unsupervised_tracked(
             "layer_val_losses": [[] for layer in model.layers],
             "layer_diffs": [[] for layer in model.layers],
             "layer_val_diffs": [[] for layer in model.layers],
+            "layer_peer_losses": [[] for layer in model.layers],
             "actvs": [[[] for layer in model.layers] for _ in range(4)],
             "norms": [[[] for layer in model.layers] for _ in range(4)],
             "weights": [[] for layer in model.layers],
@@ -200,6 +207,7 @@ def train_unsupervised_tracked(
             # Initialise batch trackers
             epoch_loss = 0 
             epoch_diffs = 0
+            epoch_peer_loss = 0
             batches_pos_actv_total = torch.zeros((model.layers[layer_i].out_features))
             batches_neg_actv_total = torch.zeros((model.layers[layer_i].out_features))
             batches_pos_norm_total = 0
@@ -230,14 +238,19 @@ def train_unsupervised_tracked(
 
                 optimiser.zero_grad()
                 loss, diffs = loss_fn(pos_actvs, neg_actvs, model.layers[layer_i].threshold, mode)
+                peer_loss = model.layers[layer_i].calc_peer_norm_loss(pos_actvs)
+                loss += 0.03 * peer_loss
+
                 loss.backward()
                 optimiser.step()
                 epoch_loss += loss.item()
                 epoch_diffs += diffs.item()
+                epoch_peer_loss += peer_loss.item()
 
             # Track epochs
             tracker['layer_losses'][layer_i].append(epoch_loss / len(pos_dataloader))
             tracker['layer_diffs'][layer_i].append(epoch_diffs / len(pos_dataloader))
+            tracker['layer_peer_losses'][layer_i].append(epoch_peer_loss / len(pos_dataloader))
             tracker['actvs'][0][layer_i].append(batches_pos_actv_total / len(pos_dataset))
             tracker['actvs'][1][layer_i].append(batches_neg_actv_total / len(pos_dataset))
             tracker['norms'][0][layer_i].append(batches_pos_norm_total / len(pos_dataset))

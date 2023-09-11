@@ -181,8 +181,8 @@ def train_unsupervised_tracked(
     # Learning Loop. For each layer, for each epoch, for each batch, perform a positive pass and a negative pass.
     for layer_i in range(len(model.layers)):
 
-        # optimiser = torch.optim.AdamW(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay)
-        optimiser = torch.optim.SGD(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
+        optimiser = torch.optim.AdamW(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay)
+        # optimiser = torch.optim.SGD(model.layers[layer_i].parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
 
         for ep in range(epochs[layer_i]):
             # Set up dataloaders and tqdm

@@ -135,7 +135,7 @@ class PreloadedDataset(Dataset):
     def cross_val_split_by_class(self, val_ratio, val_idx, val_transform=None, device="cpu"):
         assert not self.shuffled, "Dataset must not be shuffled to split by class"
         max_idx = int(1/val_ratio) - 1
-        assert val_idx >= 0 and val_idx <= max_idx, f"Invalid val_idx: {val_idx} for ratio: {ratio}"
+        assert val_idx >= 0 and val_idx <= max_idx, f"Invalid val_idx: {val_idx} for ratio: {val_ratio}"
         
         train_dataset = PreloadedDataset(None, self.shape, None, device)
         val_dataset = PreloadedDataset(None, self.shape, None, device)

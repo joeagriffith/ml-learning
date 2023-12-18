@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
@@ -59,7 +60,6 @@ class UNet(nn.Module):
             x = self.decoder[idx+1](concat_skip)
         
         return self.final_conv(x)
-
 
 def test():
     x = torch.randn((3, 1, 161, 161))

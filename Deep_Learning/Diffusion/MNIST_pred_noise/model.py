@@ -5,7 +5,22 @@ import torchvision.transforms.functional as TF
 import torch.nn.functional as F
 from tqdm.auto import trange
 from utils import showExamples
+from functional import get_index_from_list
+import math
 
+class SinusoidalPositionalEmbedding(nn.Module):
+    def __init__(self, dim):
+        super(SinusoidalPositionalEmbedding, self).__init__()
+        self.dim = dim
+    
+    def forward(self, time):
+        device = time.device
+        embeddings = math.log(10000) / (self.dim // 2 - 1)
+        embeddings = torch.exp(torch.arange(self.dim//2, device=device) * -embeddings)
+        embeddings = time[:, None] * embeddings[None, :]
+        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
+        return embeddings
+        
 class DoubleConv(nn.Module):
     def __init__(self, in_channels=128, size=32):
         super(DoubleConv, self).__init__()
@@ -25,16 +40,36 @@ class DoubleConv(nn.Module):
         return out
 
 class UNet(nn.Module):
-    def __init__(self, sizes=[32, 16, 8, 4]):
+    def __init__(
+            self,
+            betas,
+            sqrt_alphas_cumprod,
+            sqrt_one_minus_alphas_cumprod,
+            sqrt_recip_alphas,
+            posterior_variance,
+            T,
+            sizes=[32, 16, 8, 4],
+            ):
         super().__init__()
 
-        self.time_embed = nn.Sequential(
-            nn.Linear(1, 192),
-            nn.LayerNorm([192]),
-            nn.ReLU(),
-        )
+        self.betas = betas
+        self.sqrt_alphas_cumprod = sqrt_alphas_cumprod
+        self.sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod
+        self.sqrt_recip_alphas = sqrt_recip_alphas
+        self.posterior_variance = posterior_variance
+        self.T = T
+        self.device = torch.device('cpu')
 
-        self.device= torch.device('cpu')
+        # self.time_embed = nn.Sequential(
+        #     nn.Linear(1, 192),
+        #     nn.LayerNorm([192]),
+        #     nn.ReLU(),
+        # )
+        self.time_embed = nn.Sequential(
+            SinusoidalPositionalEmbedding(192),
+            nn.Linear(192, 192),
+            nn.ReLU(inplace=True),
+        )
 
         self.encoder = nn.ModuleList()
         for i, size in enumerate(sizes):
@@ -95,27 +130,38 @@ class UNet(nn.Module):
     
         return x
 
+    def sample_timestep(self, x, t):
+        with torch.no_grad():
+            betas_t = get_index_from_list(self.betas, t, x.shape)
+            sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
+            sqrt_recip_alphas_t = get_index_from_list(self.sqrt_recip_alphas, t, x.shape)
+
+            model_mean = sqrt_recip_alphas_t * (x - betas_t * self(x, t) / sqrt_one_minus_alphas_cumprod_t)
+            posterior_variance_t = get_index_from_list(self.posterior_variance, t, x.shape)
+
+            if t.sum().item() == 0:
+                return model_mean
+            else:
+                noise = torch.randn_like(x) * posterior_variance_t.sqrt()
+                return model_mean + noise
+            
     #  generates one example image, and returns x_t for all timesteps
-    def sample_steps(self, timesteps=16):
+    def sample_steps(self, every=1):
         xs = []
         x = torch.randn((1, 1, 32, 32)).to(self.device)
+        for i in range(0, self.T)[::-1]:
+            t = torch.full((1,), i, device=self.device, dtype=torch.long)
+            x = self.sample_timestep(x, t)
+            if i % every == 0:
+                xs.append(x)
 
-        with torch.no_grad():
-            for t in trange(timesteps):
-                noise = self.forward(x, torch.full([1, 1], t, dtype=torch.float32, device=self.device))
-                x = x - noise
-                xs.append(x.squeeze(0))
-        
-        showExamples(xs)
+        return xs
     
     # generates 16 examples, and returns the final x_t for each
-    def sample(self, timesteps=16):
-        x = torch.randn((16, 1, 32, 32)).to(self.device)
-
-        with torch.no_grad():
-            for t in trange(timesteps):
-                noise = self.forward(x, torch.full([16, 1], t, dtype=torch.float32, device=self.device))
-                x = x - noise
-
-        showExamples(x)
+    def sample(self, batch_size=16):
+        x = torch.randn((batch_size, 1, 32, 32)).to(self.device)
+        for i in range(0, self.T)[::-1]:
+            t = torch.full((batch_size,), i, device=self.device, dtype=torch.long)
+            x = self.sample_timestep(x, t)
+        return x
         

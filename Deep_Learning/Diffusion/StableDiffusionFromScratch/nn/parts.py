@@ -86,7 +86,8 @@ class CrossAttention(nn.Module):
         k = k.view(*interim_shape).permute(0, 2, 1, 3).contiguous()
         v = v.view(*interim_shape).permute(0, 2, 1, 3).contiguous()
 
-        scores = q @ k.transpose(-1, -2) # CoPilot suggested to use transpose(-2, -1) instead of .transpose(-1, -2)
+        # scores = q @ k.transpose(-1, -2) # CoPilot suggested to use transpose(-2, -1) instead of .transpose(-1, -2)
+        scores = q @ k.transpose(-2, -1)
         scores /= math.sqrt(self.d_head)
         scores = F.softmax(scores, dim=-1)
 
@@ -121,30 +122,13 @@ class VAE_AttentionBlock(nn.Module):
 
         return x + residual
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (Batch_Size, Channel, Height, Width)
-
-        residual = x
-
-        x = self.groupnorm_1(x)
-        x = F.silu(x)
-        x = self.conv_1(x)
-
-        x = self.groupnorm_2(x)
-        x = F.silu(x)
-        x = self.conv_2(x)
-
-        x = self.attention(x)
-
-        return x + residual
-
 class VAE_ResidualBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
-        self.groupnorm_1 = nn.GroupNorm(32, in_channels),
-        self.conv_1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+        self.groupnorm_1 = nn.GroupNorm(32, in_channels)
+        self.conv_1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
-        self.groupnorm_2 = nn.GroupNorm(32, out_channels),
+        self.groupnorm_2 = nn.GroupNorm(32, out_channels)
         self.conv_2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
 
         if in_channels == out_channels:

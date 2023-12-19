@@ -17,12 +17,6 @@ class CLIPEmbedding(nn.Module):
         # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
         token_embedding = self.token_embedding(tokens)
 
-        # # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, Dim)
-        # position_embedding = self.position_embedding.unsqueeze(0).repeat(tokens.shape[0], 1, 1)
-
-        # # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, Dim)
-        # return token_embedding + position_embedding
-
         return token_embedding + self.position_embedding
 
 
@@ -31,9 +25,9 @@ class CLIPLayer(nn.Module):
     def __init__(self, n_head: int, n_embd: int):
         super().__init__()
 
-        self.layer_norm_1 = nn.LayerNorm(n_embd)
+        self.layernorm_1 = nn.LayerNorm(n_embd)
         self.attention = SelfAttention(n_head, n_embd)
-        self.layer_norm_2 = nn.LayerNorm(n_embd)
+        self.layernorm_2 = nn.LayerNorm(n_embd)
         self.linear_1 = nn.Linear(n_embd, 4*n_embd)
         self.linear_2 = nn.Linear(4*n_embd, n_embd)
     
@@ -44,7 +38,7 @@ class CLIPLayer(nn.Module):
 
         ## SELF ATTENTION
 
-        x = self.layer_norm_1(x)
+        x = self.layernorm_1(x)
         x = self.attention(x)
         x += residual
 
@@ -52,7 +46,7 @@ class CLIPLayer(nn.Module):
 
         residual = x
 
-        x = self.layer_norm_2(x)
+        x = self.layernorm_2(x)
         x = self.linear_1(x)
         x = x * torch.sigmoid(1.702 * x) # QuickGELU activation function
         x = self.linear_2(x)
@@ -68,11 +62,11 @@ class CLIP(nn.Module):
         
         self.embedding = CLIPEmbedding(49408, 768, 77)
 
-        self.layers = nn.Module([
+        self.layers = nn.ModuleList([
             CLIPLayer(12, 768) for i in range(12)
         ])
 
-        self.layer_norm = nn.LayerNorm(768)
+        self.layernorm = nn.LayerNorm(768)
 
     def forward(self, tokens: torch.LongTensor) -> torch.FloatTensor:
 
@@ -85,7 +79,7 @@ class CLIP(nn.Module):
             state = layer(state)
 
         # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, Dim)
-        output = self.layer_norm(state)
+        output = self.layernorm(state)
 
         return output
 

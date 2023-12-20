@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from tqdm import tqdm
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.ddpm import DDPMSampler
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.ddpm import DDPMSampler
 
 WIDTH = 512
 HEIGHT = 512
@@ -91,7 +91,7 @@ def generate(
 
         if sampler_name == "ddpm":
             sampler = DDPMSampler(generator)
-            sampler.set_inference_steps(n_inference_steps)
+            sampler.set_inference_timesteps(n_inference_steps)
         else:
             raise ValueError(f"Unknown sampler: {sampler_name}")
         

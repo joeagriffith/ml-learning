@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.parts import VAE_AttentionBlock, VAE_ResidualBlock
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.parts import VAE_AttentionBlock, VAE_ResidualBlock
 
 class VAE_Decoder(nn.Sequential):
 

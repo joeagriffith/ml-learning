@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.parts import SelfAttention, CrossAttention
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.parts import SelfAttention, CrossAttention
 
 class TimeEmbedding(nn.Module):
 

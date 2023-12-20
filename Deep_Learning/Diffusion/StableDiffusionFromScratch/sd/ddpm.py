@@ -17,15 +17,11 @@ class DDPMSampler:
         
         self.betas = torch.linspace(beta_start ** 0.5, beta_end ** 0.5, num_training_steps, dtype=torch.float32) ** 2
         self.alphas = 1.0 - self.betas
-        self.sqrt_alphas = self.alphas.sqrt()
         self.alphas_cumprod = torch.cumprod(self.alphas, 0)
-        self.sqrt_alphas_cumprod = self.alphas_cumprod.sqrt()
-        self.one_min_alphas_cumprod = 1.0 - self.alphas_cumprod
-        self.sqrt_one_min_alphas_cumprod = self.one_min_alphas_cumprod.sqrt()
         self.one = torch.tensor(1.0)
     
 
-    def set_inference_steps(self, num_inference_steps=50):
+    def set_inference_timesteps(self, num_inference_steps=50):
         self.num_inference_steps = num_inference_steps
         step_ratio = self.num_training_steps // self.num_inference_steps    
         timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.int64)
@@ -38,14 +34,21 @@ class DDPMSampler:
 
 
     def _get_variance(self, timestep: int) -> torch.Tensor:
-        t = timestep
-        tm1 = self._get_previous_timestep(t)
+        prev_t = self._get_previous_timestep(timestep)
 
-        variance = (self.one_min_alphas_cumprod[tm1] / self.one_min_alphas_cumprod[t]) * self.betas[t]
-        variance = torch.clamp(variance, 1e-20)
+        alpha_prod_t = self.alphas_cumprod[timestep]
+        alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
+        current_beta_t = 1 - alpha_prod_t / alpha_prod_t_prev
+
+        # For t > 0, compute predicted variance βt (see formula (6) and (7) from https://arxiv.org/pdf/2006.11239.pdf)
+        # and sample from it to get previous sample
+        # x_{t-1} ~ N(pred_prev_sample, variance) == add variance to pred_sample
+        variance = (1 - alpha_prod_t_prev) / (1 - alpha_prod_t) * current_beta_t
+
+        # we always take the log of variance, so clamp it to ensure it's not 0
+        variance = torch.clamp(variance, min=1e-20)
 
         return variance
-
 
     def set_strength(self, strength=1.0):
         assert strength <= 1.0 and strength >= 0.0, f"Strength must be between 0 and 1 (inclusive), not: {strength}"
@@ -56,23 +59,42 @@ class DDPMSampler:
 
     def step(self, timestep: int, latent: torch.Tensor, model_output: torch.Tensor):
         t = timestep
-        tm1 = self._get_previous_timestep(t)
+        prev_t = self._get_previous_timestep(t)
 
-        a = (self.sqrt_alphas_cumprod[tm1] * self.betas[t]) / self.one_min_alphas_cumprod[t]
-        b = (self.sqrt_alphas[t] * self.one_min_alphas_cumprod[tm1]) / self.one_min_alphas_cumprod[t]
+        # 1. compute alphas, betas
+        alpha_prod_t = self.alphas_cumprod[t]
+        alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
+        beta_prod_t = 1 - alpha_prod_t
+        beta_prod_t_prev = 1 - alpha_prod_t_prev
+        current_alpha_t = alpha_prod_t / alpha_prod_t_prev
+        current_beta_t = 1 - current_alpha_t
 
-        x0_pred = (latent - self.sqrt_one_min_alphas_cumprod[t] * model_output) / self.sqrt_alphas_cumprod[t]
+        # 2. compute predicted original sample from predicted noise also called
+        # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
+        pred_original_sample = (latent - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
 
-        pred_prev_sample = a * x0_pred + b * latent
+        # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
+        # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
+        pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * current_beta_t) / beta_prod_t
+        current_sample_coeff = current_alpha_t ** (0.5) * beta_prod_t_prev / beta_prod_t
+
+        # 5. Compute predicted previous sample µ_t
+        # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
+        pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * latent
+
+        # 6. Add noise
         variance = 0
         if t > 0:
             device = model_output.device
             noise = torch.randn(model_output.shape, generator=self.generator, device=device, dtype=model_output.dtype)
-            noise *= self._get_variance(timestep) ** 0.5
-            pred_prev_sample += noise
+            # Compute the variance as per formula (7) from https://arxiv.org/pdf/2006.11239.pdf
+            variance = (self._get_variance(t) ** 0.5) * noise
+        
+        # sample from N(mu, sigma) = X can be obtained by X = mu + sigma * N(0, 1)
+        # the variable "variance" is already multiplied by the noise N(0, 1)
+        pred_prev_sample = pred_prev_sample + variance
 
         return pred_prev_sample
-
     
     def add_noise(self, original_samples: torch.FloatTensor, timesteps: torch.IntTensor) -> torch.FloatTensor:
 

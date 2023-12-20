@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.parts import SelfAttention
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.parts import SelfAttention
 
 class CLIPEmbedding(nn.Module):
 
@@ -39,7 +39,7 @@ class CLIPLayer(nn.Module):
         ## SELF ATTENTION
 
         x = self.layernorm_1(x)
-        x = self.attention(x)
+        x = self.attention(x, causal_mask=True)
         x += residual
 
         ## MLP

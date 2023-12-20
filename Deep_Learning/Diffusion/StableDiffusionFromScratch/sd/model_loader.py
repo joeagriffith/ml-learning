@@ -1,8 +1,8 @@
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.clip import CLIP
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.vae_encoder import VAE_Encoder
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.vae_decoder import VAE_Decoder
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.nn.diffusion import Diffusion
-from Deep_Learning.Diffusion.StableDiffusionFromScratch.model_converter import load_from_standard_weights
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.clip import CLIP
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.vae_encoder import VAE_Encoder
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.vae_decoder import VAE_Decoder
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.nn.diffusion import Diffusion
+from Deep_Learning.Diffusion.StableDiffusionFromScratch.sd.model_converter import load_from_standard_weights
 
 
 def preload_models_from_standard_weights(ckpt_path, device):

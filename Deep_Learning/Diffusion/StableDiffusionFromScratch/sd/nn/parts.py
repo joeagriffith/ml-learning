@@ -86,8 +86,7 @@ class CrossAttention(nn.Module):
         k = k.view(*interim_shape).permute(0, 2, 1, 3).contiguous()
         v = v.view(*interim_shape).permute(0, 2, 1, 3).contiguous()
 
-        scores = q @ k.transpose(-1, -2) # CoPilot suggested to use transpose(-2, -1) instead of .transpose(-1, -2)
-        # scores = q @ k.transpose(-2, -1)
+        scores = q @ k.transpose(-1, -2)
         scores /= math.sqrt(self.d_head)
         scores = F.softmax(scores, dim=-1)
 

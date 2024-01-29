@@ -12,9 +12,9 @@ eval_interval = 500
 learning_rate = 3e-4
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 eval_iters = 200
-n_embd = 384
-n_head = 6
-n_layer = 6
+n_embd = 192
+n_head = 3
+n_layer = 1
 dropout = 0.2
 # ----------------
 
@@ -126,6 +126,8 @@ class AttentionBlock(nn.Module):
     def forward(self, x):
         x = x + self.sa(self.layernorm1(x))
         x = x + self.ffwd(self.layernorm2(x))
+        # x = self.sa(self.layernorm1(x))
+        # x = self.ffwd(self.layernorm2(x))
         return x
 
 class GPTLanguageModel(nn.Module):

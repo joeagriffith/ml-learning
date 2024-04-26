@@ -1,5 +1,8 @@
 **\__pycache__
 **\out
+**\models
 
 # Deep_Learning\Diffusion\StableDiffusionFromScratch\data\**
 **\data
+encoded_inputs_mamba.pt
+enwik8.zip

@@ -16,6 +16,7 @@ def train(
         writer=None,
         save_dir=None,
         save_every=1,
+        aug_scaler='none'
 ):
     # Exclude bias and batch norm parameters from weight decay
     decay_parameters = [param for name, param in online_model.named_parameters() if 'weight' in name]
@@ -31,6 +32,14 @@ def train(
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     scaler = torch.cuda.amp.GradScaler()
 
+    assert aug_scaler in ['linear', 'exp', 'none'], 'aug_scaler must be one of ["linear", "exp"]'
+    if aug_scaler == 'linear':
+        aug_ps = torch.linspace(0, 0.25, num_epochs)
+    elif aug_scaler == 'exp':
+        aug_ps = 0.25 * (1.0 - torch.exp(torch.linspace(0, -5, num_epochs)))
+    elif aug_scaler == 'none':
+        aug_ps = 0.25 * torch.ones(num_epochs)
+
     last_train_loss = -1
     last_val_loss = -1
     best_val_loss = float('inf')
@@ -44,11 +53,11 @@ def train(
         epoch_train_losses = torch.zeros(len(train_loader), device=next(online_model.parameters()).device)
         for i, (images, _) in loop:
     
-            angle = torch.rand(1).item() * 360 - 180 if torch.rand(1).item() > 0.75 else 0
-            translate_x = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() > 0.75 else 0
-            translate_y = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() > 0.75 else 0
-            scale = torch.rand(1).item() * 0.5 + 0.75 if torch.rand(1).item() > 0.75 else 1.0
-            shear = torch.rand(1).item() * 50 - 25 if torch.rand(1).item() > 0.75 else 0
+            angle = torch.rand(1).item() * 360 - 180 if torch.rand(1).item() < aug_ps[epoch] else 0
+            translate_x = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() < aug_ps[epoch] else 0
+            translate_y = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() < aug_ps[epoch] else 0
+            scale = torch.rand(1).item() * 0.5 + 0.75 if torch.rand(1).item() < aug_ps[epoch] else 1.0
+            shear = torch.rand(1).item() * 50 - 25 if torch.rand(1).item() < aug_ps[epoch] else 0
             images_aug = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
             action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
 

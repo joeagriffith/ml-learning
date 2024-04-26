@@ -24,9 +24,11 @@ class Model(nn.Module):
         )
 
         self.project = nn.Sequential(
-            nn.Linear(1000 + 128, 1024, bias=False),
+            nn.Linear(1000 + 128, 4096, bias=False),
             nn.ReLU(),
-            nn.Linear(1024, 1000, bias=False),
+            nn.Linear(4096, 2048, bias=False),
+            nn.ReLU(),
+            nn.Linear(2048, 1000, bias=False)
         )
 
         self.generate = nn.Sequential(

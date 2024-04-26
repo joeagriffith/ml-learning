@@ -15,7 +15,7 @@ def train(
         writer=None,
         save_dir=None,
         save_every=1,
-        aug_scaler='linear'
+        aug_scaler='none',
 ):
     # Exclude bias and batch norm parameters from weight decay
     decay_parameters = [param for name, param in model.named_parameters() if 'weight' in name]
@@ -28,11 +28,13 @@ def train(
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     scaler = torch.cuda.amp.GradScaler()
 
-    assert aug_scaler in ['linear', 'exp'], 'aug_scaler must be one of ["linear", "exp"]'
+    assert aug_scaler in ['linear', 'exp', 'none'], 'aug_scaler must be one of ["linear", "exp"]'
     if aug_scaler == 'linear':
-        aug_ps = torch.linspace(0, 0.5, num_epochs)
+        aug_ps = torch.linspace(0, 0.25, num_epochs)
     elif aug_scaler == 'exp':
-        aug_ps = 0.5 * (1.0 - torch.exp(torch.linspace(0, -5, num_epochs)))
+        aug_ps = 0.25 * (1.0 - torch.exp(torch.linspace(0, -5, num_epochs)))
+    elif aug_scaler == 'none':
+        aug_ps = 0.25 * torch.ones(num_epochs)
 
     last_train_loss = torch.zeros(1, device=next(model.parameters()).device)
     last_val_loss = torch.zeros(1, device=next(model.parameters()).device)

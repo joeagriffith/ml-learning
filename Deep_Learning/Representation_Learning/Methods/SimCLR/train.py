@@ -63,8 +63,7 @@ def train(
             scaler.step(optimiser)
             scaler.update()
 
-
-        epoch_train_losses[i] = loss.detach()
+            epoch_train_losses[i] = loss.detach()
         
         with torch.no_grad():
             epoch_val_losses = torch.zeros(len(val_loader), device=next(model.parameters()).device)

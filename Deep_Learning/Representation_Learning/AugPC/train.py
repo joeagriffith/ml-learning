@@ -28,6 +28,18 @@ def train(
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     scaler = torch.cuda.amp.GradScaler()
 
+    train_options = {
+        num_epochs: num_epochs,
+        batch_size: batch_size,
+        lr: lr,
+        wd: wd,
+        aug_scaler: aug_scaler
+    }
+    if writer is not None:
+        writer.add_text('Encoder/options', str(train_options))
+        writer.add_text('Encoder/model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('Encoder/optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+
     assert aug_scaler in ['linear', 'exp', 'none'], 'aug_scaler must be one of ["linear", "exp"]'
     if aug_scaler == 'linear':
         aug_ps = torch.linspace(0, 0.25, num_epochs)

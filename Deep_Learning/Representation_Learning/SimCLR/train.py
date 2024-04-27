@@ -23,6 +23,19 @@ def train(
     optimiser = LARS(model.parameters(), lr=lr, weight_decay=wd)
     scaler = torch.cuda.amp.GradScaler()
 
+    train_options = {
+        num_epochs: num_epochs,
+        batch_size: batch_size,
+        lr: lr,
+        wd: wd,
+        temperature: temperature,
+        augmentation: str(augmentation),
+    }
+    if writer is not None:
+        writer.add_text('Encoder/options', str(train_options))
+        writer.add_text('Encoder/model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('Encoder/optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+
     last_train_loss = -1
     last_val_loss = -1
     best_val_loss = float('inf')

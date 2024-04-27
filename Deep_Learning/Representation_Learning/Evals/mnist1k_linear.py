@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 def mnist1k_linear_eval(
     model: nn.Module,
-    writer: SummaryWriter = None
+    writer: SummaryWriter = None,
 ):
     device = next(model.parameters()).device
 
@@ -20,7 +20,7 @@ def mnist1k_linear_eval(
     classifier = nn.Linear(model.num_features, 10, bias=False).to(device)
     num_epochs = 100
     batch_size = 50
-    lr = 0.01
+    # lr = 0.01
     optimiser = torch.optim.AdamW(classifier.parameters(), lr=lr)
 
     # Load data

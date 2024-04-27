@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from torchvision.models import resnet18, alexnet
 
-class Model(nn.Module):
+class AugPC(nn.Module):
     def __init__(self, in_features, num_actions, backbone='resnet18'):
         super().__init__()
         self.in_features = in_features

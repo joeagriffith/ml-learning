@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet18, alexnet
 
-class Model(nn.Module):
+class BYOL(nn.Module):
     def __init__(self, in_features, backbone='alexnet'):
         super().__init__()
         self.in_features = in_features

@@ -1,6 +1,5 @@
 import torch
 # from Deep_Learning.Representation_Learning.SimCLR.functional import NTXent
-from Deep_Learning.Representation_Learning.SimCLR.lars import LARS
 import torch.nn.functional as F
 from tqdm import tqdm
 

@@ -1,6 +1,6 @@
 import torch
-from Deep_Learning.Representation_Learning.SimCLR.functional import NTXent
-from Deep_Learning.Representation_Learning.SimCLR.lars import LARS
+from Deep_Learning.Representation_Learning.Methods.SimCLR.functional import NTXent
+from Deep_Learning.Representation_Learning.Methods.SimCLR.lars import LARS
 from tqdm import tqdm
 
 

@@ -40,6 +40,6 @@ class BYOL(nn.Module):
         return self.encoder(x)
     
     def copy(self):
-        model = Model(self.in_features, backbone=self.backbone).to(next(self.parameters()).device)
+        model = BYOL(self.in_features, backbone=self.backbone).to(next(self.parameters()).device)
         model.load_state_dict(self.state_dict())
         return model

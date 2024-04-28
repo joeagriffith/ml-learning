@@ -13,6 +13,7 @@ import torch.nn.functional as F
 def mnist_linear_1k_eval(
     model: nn.Module,
     writer: SummaryWriter = None,
+    flatten: bool = False,
 ):
     device = next(model.parameters()).device
 
@@ -60,6 +61,8 @@ def mnist_linear_1k_eval(
         epoch_train_loss = torch.zeros(len(train_loader), device=device)
         epoch_train_acc = torch.zeros(len(train_loader), device=device)
         for i, (x, y) in loop:
+            if flatten:
+                x = x.flatten(1)
             with torch.cuda.amp.autocast():
                 with torch.no_grad():
                     z = model(x)
@@ -80,6 +83,8 @@ def mnist_linear_1k_eval(
             epoch_val_loss = torch.zeros(len(val_loader), device=device)
             epoch_val_acc = torch.zeros(len(val_loader), device=device)
             for i, (x, y) in enumerate(val_loader):
+                if flatten:
+                    x = x.flatten(1)
                 with torch.cuda.amp.autocast():
                     z = model(x)
                     y_pred = classifier(z)
@@ -108,3 +113,50 @@ def mnist_linear_1k_eval(
         loop.close()
 
     print(f'Best validation accuracy: {best_val_acc.item()}')
+    
+def single_step_classification_eval(
+        encoder,
+        train_loader,
+        val_loader,
+        scaler,
+        learn_encoder=False,
+        flatten=False,
+):
+    encoder.eval()
+    device = next(encoder.parameters()).device
+
+    classifier = torch.nn.Linear(encoder.num_features, 10, bias=False).to(device)
+    optimiser = torch.optim.AdamW(classifier.parameters(), lr=1e-1, weight_decay=1e-4)
+
+    for i, (images, labels) in enumerate(train_loader):
+        if flatten:
+            images = images.flatten(1)
+        with torch.cuda.amp.autocast():
+            if learn_encoder:
+                z = encoder(images)        
+            else:
+                with torch.no_grad():
+                    z = encoder(images)
+
+            y_pred = classifier(z)
+            loss = F.cross_entropy(y_pred, labels)
+
+        optimiser.zero_grad(set_to_none=True)
+        scaler.scale(loss).backward()
+        scaler.step(optimiser)
+        scaler.update()
+
+    val_accs = torch.zeros(len(val_loader), device=device)
+    with torch.no_grad():
+        for i, (images, labels) in enumerate(val_loader):
+            if flatten:
+                images = images.flatten(1)
+            with torch.cuda.amp.autocast():
+                with torch.no_grad():
+                    z = encoder(images)        
+                y_pred = classifier(z)
+            val_accs[i] = (y_pred.argmax(dim=1) == labels).float().mean()
+
+    val_acc = val_accs.mean().item()
+
+    return val_acc

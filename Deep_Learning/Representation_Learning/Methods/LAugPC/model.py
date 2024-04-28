@@ -44,12 +44,16 @@ class LAugPC(nn.Module):
         z = self.encoder(x)
         return z
     
-    def predict_z(self, z, a):
+    def predict(self, x, a=None):
+        if a is None:
+            a = torch.zeros(x.shape[0], self.num_actions).to(x.device)
+        
+        z = self.encoder(x)
         a = self.action_encoder(a)
         z_pred = self.transition(torch.cat([z, a], dim=1))
         return z_pred
     
     def copy(self):
-        model = Model(self.in_features, self.num_actions, self.backbone).to(next(self.parameters()).device)
+        model = LAugPC(self.in_features, self.num_actions, self.backbone).to(next(self.parameters()).device)
         model.load_state_dict(self.state_dict())
         return model

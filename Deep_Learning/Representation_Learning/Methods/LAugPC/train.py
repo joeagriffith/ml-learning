@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms.v2.functional as F_v2
 from tqdm import tqdm
+from Deep_Learning.Representation_Learning.Methods.LAugPC.model import LAugPC
 
 
 def train(
@@ -24,6 +25,7 @@ def train(
     non_decay_parameters = [param for name, param in online_model.named_parameters() if 'weight' not in name]
     non_decay_parameters = [{'params': non_decay_parameters, 'weight_decay': 0.0}]
     optimiser = torch.optim.AdamW(decay_parameters + non_decay_parameters, lr=lr, weight_decay=wd)
+    # optimiser = torch.optim.AdamW(online_model.parameters(), lr=lr, weight_decay=wd)
 
     target_model = online_model.copy()
     betas = torch.linspace(beta, 1.0, num_epochs)
@@ -77,8 +79,8 @@ def train(
             with torch.cuda.amp.autocast():
                 with torch.no_grad():
                     z_target = target_model(images_aug)
-                z = online_model(images)
-                z_pred = online_model.predict(z, action)
+                    # z_target = online_model(images_aug)
+                z_pred = online_model.predict(images, action)
                 loss = F.mse_loss(z_pred, z_target)
 
             optimiser.zero_grad(set_to_none=True)
@@ -105,11 +107,10 @@ def train(
 
                 with torch.cuda.amp.autocast():
                     z_target = target_model(images_aug).detach()
-                    z = online_model(images)
-                    z_pred = online_model.predict(z, action)
+                    z_pred = online_model.predict(images, action)
                     loss = F.mse_loss(z_pred, z_target)
 
-                epoch_val_losses[i].append(loss.detach())
+                epoch_val_losses[i] = loss.detach()
         
         last_train_loss = epoch_train_losses.mean().item()
         last_val_loss = epoch_val_losses.mean().item()

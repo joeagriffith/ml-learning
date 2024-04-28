@@ -40,16 +40,48 @@ class AugPC(nn.Module):
             nn.Linear(2048, self.num_features, bias=False)
         )
 
+        #for Mnist (-1, 1, 28, 28)
+        # self.generate = nn.Sequential(
+        #     nn.Unflatten(1, (self.num_features, 1, 1)),
+        #     nn.ConvTranspose2d(self.num_features, 512, 3, 1),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(512, 256, 3, 3),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(256, 128, 3, 3),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(128, 1, 2, 1),
+        # )
+
+        # for CIFAR-10 (-1, 3, 32, 32)
         self.generate = nn.Sequential(
-            nn.Unflatten(1, (self.num_features, 1, 1)),
-            nn.ConvTranspose2d(self.num_features, 512, 3, 1),
+            nn.Unflatten(1, (256, 1, 1)),
+            nn.ConvTranspose2d(256, 512, 3, 1),
             nn.ReLU(),
             nn.ConvTranspose2d(512, 256, 3, 3),
             nn.ReLU(),
             nn.ConvTranspose2d(256, 128, 3, 3),
             nn.ReLU(),
-            nn.ConvTranspose2d(128, 1, 2, 1),
+            nn.ConvTranspose2d(128, 128, 4, 1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128, 3, 3, 1),
         )
+
+        # # for STL-10 (-1, 3, 96, 96)
+        # self.generate = nn.Sequential(
+        #     nn.Unflatten(1, (256, 1, 1)),
+        #     nn.ConvTranspose2d(256, 512, 3, 1),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(512, 256, 4, 3),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(256, 128, 4, 3),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(128, 128, 3, 3),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(128, 64, 4, 1),
+        #     nn.ReLU(),
+        #     nn.Conv2d(64, 3, 3, 1, 1),
+        # )
+
 
     def forward(self, x):
         z = self.encoder(x)

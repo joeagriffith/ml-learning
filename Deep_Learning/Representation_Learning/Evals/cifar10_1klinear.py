@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 
 
-def mnist1k_linear_eval(
+def cifar10_1klinear_eval(
     model: nn.Module,
     writer: SummaryWriter = None,
 ):
@@ -24,8 +24,8 @@ def mnist1k_linear_eval(
     optimiser = torch.optim.AdamW(classifier.parameters(), lr=lr)
 
     # Load data
-    t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
-    dataset = datasets.MNIST(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
+    t_dataset = datasets.CIFAR10(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
+    dataset = datasets.CIFAR10(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
     train1k = PreloadedDataset.from_dataset(dataset, transforms.ToTensor(), device)
     test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
 

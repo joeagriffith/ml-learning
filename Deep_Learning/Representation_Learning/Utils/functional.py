@@ -33,3 +33,17 @@ def NTXent(z:torch.Tensor, temperature:float=0.5):
     loss = losses[mask.bool()].mean()
 
     return loss
+
+def smooth_l1_loss(input:torch.Tensor, target:torch.Tensor, beta:float=1.0):
+    """
+    Compute the smooth L1 loss for the given input and target tensors.
+    Args:
+        input: torch.Tensor, the input tensor.
+        target: torch.Tensor, the target tensor.
+        beta: float, the beta parameter.
+    Returns:
+        torch.Tensor, the computed loss.
+    """
+    diff = torch.abs(input - target)
+    loss = torch.where(diff < beta, 0.5 * diff ** 2 / beta, diff - 0.5 * beta)
+    return loss.mean()

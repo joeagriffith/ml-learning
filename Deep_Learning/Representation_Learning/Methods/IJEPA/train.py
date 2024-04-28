@@ -31,12 +31,12 @@ def train(
     scaler = torch.cuda.amp.GradScaler()
 
     train_options = {
-        num_epochs: num_epochs,
-        batch_size: batch_size,
-        lr: lr,
-        wd: wd,
-        augmentation: str(augmentation),
-        beta: beta,
+        'num_epochs': num_epochs,
+        'batch_size': batch_size,
+        'lr': lr,
+        'wd': wd,
+        'augmentation': str(augmentation),
+        'beta': beta,
     }
     if writer is not None:
         writer.add_text('Encoder/options', str(train_options))

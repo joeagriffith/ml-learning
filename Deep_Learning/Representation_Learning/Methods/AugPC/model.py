@@ -8,6 +8,7 @@ class AugPC(nn.Module):
         super().__init__()
         self.in_features = in_features
         self.num_actions = num_actions
+        self.backbone = backbone
 
         if backbone == 'resnet18':
             self.encoder = resnet18()

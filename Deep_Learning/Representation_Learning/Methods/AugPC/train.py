@@ -17,6 +17,7 @@ def train(
         save_every=1,
         aug_scaler='none',
 ):
+
     # Exclude bias and batch norm parameters from weight decay
     decay_parameters = [param for name, param in model.named_parameters() if 'weight' in name]
     decay_parameters = [{'params': decay_parameters}]
@@ -29,11 +30,11 @@ def train(
     scaler = torch.cuda.amp.GradScaler()
 
     train_options = {
-        num_epochs: num_epochs,
-        batch_size: batch_size,
-        lr: lr,
-        wd: wd,
-        aug_scaler: aug_scaler
+        'num_epochs': num_epochs,
+        'batch_size': batch_size,
+        'lr': lr,
+        'wd': wd,
+        'aug_scaler': aug_scaler
     }
     if writer is not None:
         writer.add_text('Encoder/options', str(train_options))
@@ -101,6 +102,7 @@ def train(
                     loss = F.mse_loss(images_pred, images_aug)
 
                 epoch_val_losses[i] = loss.detach()
+
         
         last_train_loss = epoch_train_losses.mean().item()
         last_val_loss = epoch_val_losses.mean().item()

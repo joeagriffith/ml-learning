@@ -37,7 +37,7 @@ class LAugPC(nn.Module):
             nn.ReLU(),
             nn.Linear(4096, 2048, bias=False),
             nn.ReLU(),
-            nn.Linear(2048, self.num_features, bias=False)
+            nn.Linear(2048, self.num_features, bias=False),
         )
     
     def forward(self, x):

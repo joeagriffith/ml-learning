@@ -28,17 +28,17 @@ class LAugPC(nn.Module):
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
+            nn.Linear(256, 128)
         )
 
         self.transition = nn.Sequential(
-            nn.Linear(self.num_features + 128, 4096, bias=False),
+            nn.Linear(self.num_features + 128, 4096, bias=True),
             nn.ReLU(),
-            nn.Linear(4096, 2048, bias=False),
+            nn.Linear(4096, 2048, bias=True),
             nn.ReLU(),
-            nn.Linear(2048, self.num_features, bias=False),
+            nn.Linear(2048, self.num_features, bias=True),
         )
+        
     
     def forward(self, x):
         z = self.encoder(x)

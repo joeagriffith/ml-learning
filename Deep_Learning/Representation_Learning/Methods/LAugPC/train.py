@@ -72,7 +72,11 @@ def train(
         'lr': lr,
         'wd': wd,
         'beta': beta,
+        'tau_0': tau_0,
+        'tau_e': tau_e,
+        'tau_T': tau_T,
         'aug_scaler': aug_scaler,
+        'learn_on_ss': learn_on_ss,
     }
     if writer is not None:
         writer.add_text('Encoder/options', str(train_options))

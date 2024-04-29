@@ -147,6 +147,7 @@ def single_step_classification_eval(
         scaler.update()
 
     val_accs = torch.zeros(len(val_loader), device=device)
+    val_losses = torch.zeros(len(val_loader), device=device)
     with torch.no_grad():
         for i, (images, labels) in enumerate(val_loader):
             if flatten:
@@ -156,7 +157,9 @@ def single_step_classification_eval(
                     z = encoder(images)        
                 y_pred = classifier(z)
             val_accs[i] = (y_pred.argmax(dim=1) == labels).float().mean()
+            val_losses[i] = F.cross_entropy(y_pred, labels)
 
     val_acc = val_accs.mean().item()
+    val_loss = val_losses.mean().item()
 
-    return val_acc
+    return val_acc, val_loss

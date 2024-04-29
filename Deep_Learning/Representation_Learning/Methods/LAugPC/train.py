@@ -170,7 +170,7 @@ def train(
         # single step linear classification eval
         if learn_on_ss:
             optimiser.zero_grad(set_to_none=True)
-        ss_val_acc = single_step_classification_eval(online_model, ss_train_loader, ss_val_loader, scaler, learn_on_ss)
+        ss_val_acc, ss_val_loss = single_step_classification_eval(online_model, ss_train_loader, ss_val_loader, scaler, learn_on_ss)
         if learn_on_ss:
             scaler.step(optimiser)
             scaler.update()
@@ -183,7 +183,8 @@ def train(
             writer.add_scalar('Encoder/train_loss', last_train_loss, epoch)
             writer.add_scalar('Encoder/val_loss', last_val_loss, epoch)
             writer.add_scalar('Encoder/1step_val_acc', ss_val_acc, epoch)
+            writer.add_scalar('Encoder/1step_val_loss', ss_val_loss, epoch)
         
-        if last_val_loss < best_val_loss and save_dir is not None and epoch % save_every == 0:
-            best_val_loss = last_val_loss
+        if ss_val_loss < best_val_loss and save_dir is not None and epoch % save_every == 0:
+            best_val_loss = ss_val_loss
             torch.save(online_model.state_dict(), save_dir)

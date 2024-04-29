@@ -47,3 +47,8 @@ def smooth_l1_loss(input:torch.Tensor, target:torch.Tensor, beta:float=1.0):
     diff = torch.abs(input - target)
     loss = torch.where(diff < beta, 0.5 * diff ** 2 / beta, diff - 0.5 * beta)
     return loss.mean()
+
+def negative_cosine_similarity(x1:torch.Tensor, x2:torch.Tensor):
+    x1 = F.normalize(x1, dim=-1)
+    x2 = F.normalize(x2, dim=-1)
+    return -torch.matmul(x1, x2.T).sum(dim=-1).mean()

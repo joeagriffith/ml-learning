@@ -113,7 +113,31 @@ def mnist_linear_1k_eval(
         loop.close()
 
     print(f'Best validation accuracy: {best_val_acc.item()}')
-    
+
+
+def get_ss_mnist_loaders(batch_size, device):
+    # # Prepare data for single step classification eval
+    # Load data
+    t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
+    dataset = datasets.MNIST(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
+    train1k = PreloadedDataset.from_dataset(dataset, transforms.ToTensor(), device)
+    test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
+    # Reduce to 1000 samples, 100 from each class.
+    indices = []
+    for i in range(10):
+        idx = train1k.targets == i
+        indices.append(torch.where(idx)[0][:100])
+    indices = torch.cat(indices)
+    train1k.images = train1k.images[indices]
+    train1k.transformed_images = train1k.transformed_images[indices]
+    train1k.targets = train1k.targets[indices]
+    # Build data loaders
+    ss_train_loader = DataLoader(train1k, batch_size=100, shuffle=True)
+    ss_val_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
+
+    return ss_train_loader, ss_val_loader
+
+
 def single_step_classification_eval(
         encoder,
         train_loader,

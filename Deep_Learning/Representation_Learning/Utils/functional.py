@@ -52,3 +52,29 @@ def negative_cosine_similarity(x1:torch.Tensor, x2:torch.Tensor):
     x1 = F.normalize(x1, dim=-1)
     x2 = F.normalize(x2, dim=-1)
     return -torch.matmul(x1, x2.T).sum(dim=-1).mean()
+
+
+def get_optimiser(model, optimiser, lr, wd, exclude_bias=True, exclude_bn=True, momentum=0.9, betas=(0.9, 0.999)):
+    non_decay_parameters = []
+    decay_parameters = []   
+    for n, p in model.named_parameters():
+        if exclude_bias and 'bias' in n:
+            non_decay_parameters.append(p)
+        elif exclude_bn and 'bn' in n:
+            non_decay_parameters.append(p)
+        else:
+            decay_parameters.append(p)
+    non_decay_parameters = [{'params': non_decay_parameters, 'weight_decay': 0.0}]
+    decay_parameters = [{'params': decay_parameters}]
+
+    assert optimiser in ['AdamW', 'SGD'], 'optimiser must be one of ["AdamW", "SGD"]'
+    if optimiser == 'AdamW':
+        if momentum != 0.9:
+            print('Warning: AdamW does not accept momentum parameter. Ignoring it. Please specify betas instead.')
+        optimiser = torch.optim.AdamW(decay_parameters + non_decay_parameters, lr=lr, weight_decay=wd, betas=betas)
+    elif optimiser == 'SGD':
+        if betas != (0.9, 0.999):
+            print('Warning: SGD does not accept betas parameter. Ignoring it. Please specify momentum instead.')
+        optimiser = torch.optim.SGD(decay_parameters + non_decay_parameters, lr=lr, weight_decay=wd, momentum=momentum)
+    
+    return optimiser

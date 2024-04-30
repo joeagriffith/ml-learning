@@ -7,17 +7,16 @@ from tqdm import tqdm
 
 
 from Deep_Learning.Representation_Learning.Utils.functional import smooth_l1_loss, negative_cosine_similarity
-from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import single_step_classification_eval
+from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import single_step_classification_eval, get_ss_mnist_loaders
 
 
 def train(
         model,
+        optimiser,
         train_dataset,
         val_dataset,
         num_epochs,
         batch_size,
-        lr,
-        wd,
         augmentation,
         beta=None,
         normalise=True,
@@ -26,41 +25,22 @@ def train(
         save_dir=None,
         save_every=1,
 ):
-    # # Prepare data for single step classification eval
-    # Load data
     device = next(model.parameters()).device
-    t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
-    dataset = datasets.MNIST(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
-    train1k = PreloadedDataset.from_dataset(dataset, transforms.ToTensor(), device)
-    test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
-    # Reduce to 1000 samples, 100 from each class.
-    indices = []
-    for i in range(10):
-        idx = train1k.targets == i
-        indices.append(torch.where(idx)[0][:100])
-    indices = torch.cat(indices)
-    train1k.images = train1k.images[indices]
-    train1k.transformed_images = train1k.transformed_images[indices]
-    train1k.targets = train1k.targets[indices]
-    # Build data loaders
-    ss_train_loader = DataLoader(train1k, batch_size=100, shuffle=True)
-    ss_val_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
+    ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-    optimiser = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=wd, momentum=0.9)
     scaler = torch.cuda.amp.GradScaler()
 
     train_options = {
         'num_epochs': num_epochs,
         'batch_size': batch_size,
-        'lr': lr,
-        'wd': wd,
         'augmentation': str(augmentation),
         'beta': beta,
         'normalise': normalise,
         'learn_on_ss': learn_on_ss,
     }
+
     if writer is not None:
         writer.add_text('Encoder/options', str(train_options))
         writer.add_text('Encoder/model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
@@ -82,17 +62,23 @@ def train(
                 with torch.no_grad():
                     x1, x2 = augmentation(images), augmentation(images)
 
-                z1, z2 = model(x1), model(x2)
-                p1, p2 = model.project(z1), model.project(z2)
-                y1, y2 = model.predict(p1), model.predict(p2)
+                y1, y2 = model(x1), model(x2)
+                z1, z2 = model.project(y1), model.project(y2)
+                p1, p2 = model.predict(z1), model.predict(z2)
 
-                # loss = negative_cosine_similarity(y1, p2.detach()) / 2 + negative_cosine_similarity(y2, p1.detach()) / 2
-                loss = F.mse_loss(F.normalize(y1), F.normalize(p2.detach())) / 2 + F.mse_loss(F.normalize(y2), F.normalize(p1.detach())) / 2
+                if normalise:
+                    z1, z2 = F.normalize(z1, dim=-1), F.normalize(z2, dim=-1)
+                    p1, p2 = F.normalize(p1, dim=-1), F.normalize(p2, dim=-1)
 
-            optimiser.zero_grad(set_to_none=True)
+                if beta is None:
+                    loss = 0.5 * (F.mse_loss(p1, z2.detach()) + F.mse_loss(p2, z1.detach()))
+                else:
+                    loss = 0.5 * (smooth_l1_loss(p1, z2.detach(), beta) + smooth_l1_loss(p2, z2.detach(), beta))
+
             scaler.scale(loss).backward()
             scaler.step(optimiser)
             scaler.update()
+            optimiser.zero_grad(set_to_none=True)
 
             epoch_train_losses[i] = loss.detach()
         
@@ -101,23 +87,29 @@ def train(
             for i, (images, _) in enumerate(val_loader):
                 with torch.cuda.amp.autocast():
                     x1, x2 = augmentation(images), augmentation(images)
-                    z1, z2 = model(x1), model(x2)
-                    p1, p2 = model.project(z1), model.project(z2)
-                    y1, y2 = model.predict(p1), model.predict(p2)
-                    # loss = negative_cosine_similarity(y1, p2.detach()) / 2 + negative_cosine_similarity(y2, y1.detach()) / 2
-                    loss = F.mse_loss(F.normalize(y1), F.normalize(p2.detach())) / 2 + F.mse_loss(F.normalize(y2), F.normalize(p1.detach())) / 2
+                    y1, y2 = model(x1), model(x2)
+                    z1, z2 = model.project(y1), model.project(y2)
+                    p1, p2 = model.predict(z1), model.predict(z2)
 
-                epoch_val_losses[i] = loss.detach()
+                    if normalise:
+                        z1, z2 = F.normalize(z1, dim=-1), F.normalize(z2, dim=-1)
+                        p1, p2 = F.normalize(p1, dim=-1), F.normalize(p2, dim=-1)
+
+                    if beta is None:
+                        loss = 0.5 * (F.mse_loss(p1, z2.detach()) + F.mse_loss(p2, z1.detach()))
+                    else:
+                        loss = 0.5 * (smooth_l1_loss(p1, z2.detach(), beta) + smooth_l1_loss(p2, z1.detach(), beta))
+
+                    epoch_val_losses[i] = loss.detach()
 
         # single step linear classification eval
-        if learn_on_ss:
-            optimiser.zero_grad(set_to_none=True)
         ss_val_acc, ss_val_loss = single_step_classification_eval(model, ss_train_loader, ss_val_loader, scaler, learn_on_ss)
         if learn_on_ss:
             scaler.step(optimiser)
             scaler.update()
+            optimiser.zero_grad(set_to_none=True)
         
-        last_train_loss = epoch_train_losses.mean().item() 
+        last_train_loss = epoch_train_losses.mean().item()
         last_val_loss = epoch_val_losses.mean().item()
         postfix = {'train_loss': last_train_loss, 'val_loss': last_val_loss}
         if writer is not None:

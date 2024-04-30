@@ -25,8 +25,8 @@ def train(
     non_decay_parameters = [{'params': non_decay_parameters, 'weight_decay': 0.0}]
     optimiser = torch.optim.AdamW(decay_parameters + non_decay_parameters, lr=lr, weight_decay=wd)
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=4)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=4)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     scaler = torch.cuda.amp.GradScaler()
 
     train_options = {
@@ -62,7 +62,6 @@ def train(
 
         epoch_train_losses = torch.zeros(len(train_loader), device=next(model.parameters()).device)
         for i, (images, _) in loop:
-            images = images.to(device)
 
             act_p = torch.rand(5)
             angle = torch.rand(1).item() * 360 - 180 if act_p[0] < aug_ps[epoch] else 0
@@ -87,7 +86,6 @@ def train(
         with torch.no_grad():
             epoch_val_losses = torch.zeros(len(val_loader), device=next(model.parameters()).device)
             for i, (images, _) in enumerate(val_loader):
-                images = images.to(device)
                 act_p = torch.rand(5)
                 angle = torch.rand(1).item() * 360 - 180 if act_p[0] > 0.75 else 0
                 translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] > 0.75 else 0

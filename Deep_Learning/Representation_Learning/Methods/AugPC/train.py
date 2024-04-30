@@ -2,6 +2,10 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms.v2.functional as F_v2
 from tqdm import tqdm
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+from Utils.dataset import PreloadedDataset
+from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import single_step_classification_eval
 
 
 def train(
@@ -12,11 +16,31 @@ def train(
         batch_size,
         lr,
         wd,
+        learn_on_ss=False,
         writer=None,
         save_dir=None,
         save_every=1,
         aug_scaler='none',
 ):
+    # # Prepare data for single step classification eval
+    # Load data
+    device = next(model.parameters()).device
+    t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
+    dataset = datasets.MNIST(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
+    train1k = PreloadedDataset.from_dataset(dataset, transforms.ToTensor(), device)
+    test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
+    # Reduce to 1000 samples, 100 from each class.
+    indices = []
+    for i in range(10):
+        idx = train1k.targets == i
+        indices.append(torch.where(idx)[0][:100])
+    indices = torch.cat(indices)
+    train1k.images = train1k.images[indices]
+    train1k.transformed_images = train1k.transformed_images[indices]
+    train1k.targets = train1k.targets[indices]
+    # Build data loaders
+    ss_train_loader = DataLoader(train1k, batch_size=100, shuffle=True)
+    ss_val_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
 
     # Exclude bias and batch norm parameters from weight decay
     decay_parameters = [param for name, param in model.named_parameters() if 'weight' in name]
@@ -55,6 +79,7 @@ def train(
     postfix = {}
     device=next(model.parameters()).device
     for epoch in range(num_epochs):
+        train_dataset.apply_transform(batch_size=batch_size)
         loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
         loop.set_description(f'Epoch [{epoch}/{num_epochs}]')
         if epoch > 0:
@@ -63,6 +88,7 @@ def train(
         epoch_train_losses = torch.zeros(len(train_loader), device=next(model.parameters()).device)
         for i, (images, _) in loop:
 
+            # Create Ending Image
             act_p = torch.rand(5)
             angle = torch.rand(1).item() * 360 - 180 if act_p[0] < aug_ps[epoch] else 0
             translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < aug_ps[epoch] else 0
@@ -101,14 +127,23 @@ def train(
 
                 epoch_val_losses[i] = loss.detach()
 
+        # single step linear classification eval
+        if learn_on_ss:
+            optimiser.zero_grad(set_to_none=True)
+        ss_val_acc, ss_val_loss = single_step_classification_eval(model, ss_train_loader, ss_val_loader, scaler, learn_on_ss)
+        if learn_on_ss:
+            scaler.step(optimiser)
+            scaler.update()
         
         last_train_loss = epoch_train_losses.mean().item()
         last_val_loss = epoch_val_losses.mean().item()
         postfix = {'train_loss': last_train_loss, 'val_loss': last_val_loss}
-        if last_val_loss < best_val_loss and save_dir is not None and epoch % save_every == 0:
-            best_val_loss = last_val_loss
+        if ss_val_loss < best_val_loss and save_dir is not None and epoch % save_every == 0:
+            best_val_loss = ss_val_loss
             torch.save(model.state_dict(), save_dir)
 
         if writer is not None:
             writer.add_scalar('Encoder/train_loss', last_train_loss, epoch)
             writer.add_scalar('Encoder/val_loss', last_val_loss, epoch)
+            writer.add_scalar('Encoder/1step_val_acc', ss_val_acc, epoch)
+            writer.add_scalar('Encoder/1step_val_loss', ss_val_loss, epoch)

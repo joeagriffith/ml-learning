@@ -44,16 +44,6 @@ def train(
     end_tau = 1.0,
     taus = cosine_schedule(start_tau, end_tau, num_epochs)
 
-#============================== Loss Parameters ==============================
-    # Temperature schedule
-    assert num_epochs >= 30, 'num_epochs must be >= 30 because of the temperature schedule'
-    tmp_s = 0.1
-    tmp_ts = torch.cat([torch.linspace(0.04, 0.07, 30), torch.ones(num_epochs-30) * 0.07])
-
-    # Initialise C
-    C = torch.zeros(1, online_model.num_features, device=device)
-    C_mom = 0.9
-
 # ============================== Data Handling ==============================
     # Initialise dataloaders for single step classification eval
     ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device)

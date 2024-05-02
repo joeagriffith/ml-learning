@@ -152,7 +152,7 @@ def train(
         
         # Validation Pass
         with torch.no_grad():
-            epoch_val_losses = torch.zeros(len(val_loader), device=next(online_model.parameters()).device)
+            epoch_val_losses = torch.zeros(len(val_loader), device=device)
             for i, (images, _) in enumerate(val_loader):
                 with torch.cuda.amp.autocast():
                     # Augment images
@@ -166,7 +166,7 @@ def train(
                     s1_p, s2_p = student_model.project(s1), student_model.project(s2)
                     t1_p, t2_p = teacher_model.project(t1), teacher_model.project(t2)
 
-                    loss = 0.5 * (H(s1_p, t1_p, tmp_s, tmp_t, C) + H(s2_p, t2_p, tmp_s, tmp_t, C))
+                    loss = 0.5 * (H(s1_p, t1_p, tmp_s, tmp_ts[epoch], C) + H(s2_p, t2_p, tmp_s, tmp_ts[epoch], C))
 
                     epoch_val_losses[i] = loss.detach()
 

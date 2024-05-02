@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import math
 
 def NTXent(z:torch.Tensor, temperature:float=0.5):
     """
@@ -78,3 +79,7 @@ def get_optimiser(model, optimiser, lr, wd, exclude_bias=True, exclude_bn=True, 
         optimiser = torch.optim.SGD(decay_parameters + non_decay_parameters, lr=lr, weight_decay=wd, momentum=momentum)
     
     return optimiser
+
+def cosine_schedule(base, end, T):
+    # wds = end_wd - (end_wd - base_wd) * ((torch.arange(0, num_epochs, 1) * math.pi / num_epochs).cos() + 1) / 2
+    return end - (end - base) * ((torch.arange(0, T, 1) * math.pi / T).cos() + 1) / 2

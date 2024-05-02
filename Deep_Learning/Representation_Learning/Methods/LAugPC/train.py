@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn.functional as F
 import torchvision.transforms.v2.functional as F_v2
@@ -18,9 +19,7 @@ def train(
         num_epochs,
         batch_size,
         beta=None,
-        tau_0=0.996,
-        tau_e=0.999,
-        tau_T=100,
+        tau_base=0.996,
         aug_scaler='none',
         learn_on_ss=False,
         normalise=False,
@@ -30,9 +29,7 @@ def train(
 ):
     # Initialise target model and its EMA schedule
     target_model = online_model.copy()
-    taus = torch.linspace(tau_0, tau_e, tau_T)
-    taus_end = torch.ones(num_epochs - tau_T) * tau_e
-    taus = torch.cat([taus, taus_end])
+    taus = 1 - (1 - tau_base) * ((torch.arange(0, num_epochs, 1) * math.pi / num_epochs).cos() + 1) / 2
 
     # Initialise augmentation probabilty schedule
     assert aug_scaler in ['linear', 'exp', 'none'], 'aug_scaler must be one of ["linear", "exp"]'
@@ -54,9 +51,7 @@ def train(
         'num_epochs': num_epochs,
         'batch_size': batch_size,
         'beta': beta,
-        'tau_0': tau_0,
-        'tau_e': tau_e,
-        'tau_T': tau_T,
+        'tau_base': tau_base,
         'aug_scaler': aug_scaler,
         'learn_on_ss': learn_on_ss,
         'normalise': normalise,

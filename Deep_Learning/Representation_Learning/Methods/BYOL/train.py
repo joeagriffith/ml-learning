@@ -16,9 +16,7 @@ def train(
         batch_size,
         augmentation,
         beta=None,
-        tau_0=0.996,
-        tau_e=0.999,
-        tau_T=100,
+        tau_base=0.996,
         normalise=True,
         learn_on_ss=False,
         writer=None,
@@ -27,9 +25,7 @@ def train(
 ):
     # Initialise target model and its EMA schedule
     target_model = online_model.copy()
-    taus = torch.linspace(tau_0, tau_e, tau_T)
-    taus_end = torch.ones(num_epochs - tau_T) * tau_e
-    taus = torch.cat([taus, taus_end])
+    taus = 1 - (1 - tau_base) * ((torch.arange(0, num_epochs, 1) * math.pi / num_epochs).cos() + 1) / 2
 
     device = next(online_model.parameters()).device
     ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device)
@@ -42,9 +38,7 @@ def train(
         'num_epochs': num_epochs,
         'batch_size': batch_size,
         'augmentation': str(augmentation),
-        'tau_0': tau_0,
-        'tau_e': tau_e,
-        'tau_T': tau_T,
+        'tau_base': tau_base,
         'beta': beta,
         'normalise': normalise,
         'learn_on_ss': learn_on_ss,

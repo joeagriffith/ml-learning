@@ -2,8 +2,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-
-from Deep_Learning.Representation_Learning.Utils.functional import smooth_l1_loss
+from Deep_Learning.Representation_Learning.Utils.functional import cosine_schedule, smooth_l1_loss
 from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import single_step_classification_eval, get_ss_mnist_loaders
 
 
@@ -16,43 +15,79 @@ def train(
         batch_size,
         augmentation,
         beta=None,
-        tau_base=0.996,
-        normalise=True,
         learn_on_ss=False,
         writer=None,
         save_dir=None,
         save_every=1,
 ):
-    # Initialise target model and its EMA schedule
-    target_model = online_model.copy()
-    taus = 1 - (1 - tau_base) * ((torch.arange(0, num_epochs, 1) * math.pi / num_epochs).cos() + 1) / 2
-
     device = next(online_model.parameters()).device
+
+#============================== Online Model Learning Parameters ==============================
+    # LR schedule, warmup then cosine
+    base_lr = optimiser.param_groups[0]['lr'] * batch_size / 256
+    end_lr = 1e-6
+    warm_up_lrs = torch.linspace(0, base_lr, 10)
+    cosine_lrs = cosine_schedule(base_lr, end_lr, num_epochs-10)
+    lrs = torch.cat([warm_up_lrs, cosine_lrs])
+    assert len(lrs) == num_epochs
+
+    # WD schedule, cosine 
+    start_wd = 0.04
+    end_wd = 0.4
+    wds = cosine_schedule(start_wd, end_wd, num_epochs)
+    
+#============================== Target Model Learning Parameters ==============================
+    # Initialise target model
+    target_model = online_model.copy()
+    # EMA schedule, cosine
+    start_tau=0.996,
+    end_tau = 1.0,
+    taus = cosine_schedule(start_tau, end_tau, num_epochs)
+
+#============================== Loss Parameters ==============================
+    # Temperature schedule
+    assert num_epochs >= 30, 'num_epochs must be >= 30 because of the temperature schedule'
+    tmp_s = 0.1
+    tmp_ts = torch.cat([torch.linspace(0.04, 0.07, 30), torch.ones(num_epochs-30) * 0.07])
+
+    # Initialise C
+    C = torch.zeros(1, online_model.num_features, device=device)
+    C_mom = 0.9
+
+# ============================== Data Handling ==============================
+    # Initialise dataloaders for single step classification eval
     ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device)
 
+    # Initialise dataloaders for training and validation
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+# ============================== Training Stuff ==============================
+    # Initialise scaler for mixed precision training
     scaler = torch.cuda.amp.GradScaler()
 
+    # Log training options
     train_options = {
         'num_epochs': num_epochs,
         'batch_size': batch_size,
         'augmentation': str(augmentation),
-        'tau_base': tau_base,
         'beta': beta,
-        'normalise': normalise,
         'learn_on_ss': learn_on_ss,
     }
 
+    # Log training options, model details, and optimiser details
     if writer is not None:
         writer.add_text('Encoder/options', str(train_options))
         writer.add_text('Encoder/model', str(online_model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
         writer.add_text('Encoder/optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'))
 
+    # Initialise training variables
     last_train_loss = -1
     last_val_loss = -1
     best_val_loss = float('inf')
     postfix = {}
+
+# ============================== Training Loop ==============================
     for epoch in range(num_epochs):
         train_dataset.apply_transform(batch_size=batch_size)
         loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
@@ -64,20 +99,30 @@ def train(
         epoch_train_losses = torch.zeros(len(train_loader), device=device)
         for i, (images, _) in loop:
             with torch.cuda.amp.autocast():
-                x1, x2 = augmentation(images), augmentation(images)
-                y1, y2 = target_model(x1), online_model(x2)
-                z1, z2 = target_model.project(y1), online_model.project(y2)
-                p1, p2 = target_model.predict(z1), online_model.predict(z2)
+                with torch.no_grad():
+                    # Augment images
+                    x1, x2 = augmentation(images), augmentation(images)
+                    y1_t, y2_t = target_model(x1), target_model(x2)
+                    z1_t, z2_t = target_model.project(y1_t), target_model.project(y2_t)
+                    z1_t, z2_t = F.normalize(z1_t, dim=-1), F.normalize(z2_t, dim=-1)
 
-                if normalise:
-                    z1, z2 = F.normalize(z1, dim=-1), F.normalize(z2, dim=-1)
-                    p1, p2 = F.normalize(p1, dim=-1), F.normalize(p2, dim=-1)
+                y1_o, y2_o = online_model(x1), online_model(x2)
+                z1_o, z2_o = online_model.project(y1_o), online_model.project(y2_o)
+                p1_o, p2_o = online_model.predict(z1_o), online_model.predict(z2_o)
+                p1_o, p2_o = F.normalize(p1_o, dim=-1), F.normalize(p2_o, dim=-1)
 
                 if beta is None:
-                    loss = 0.5 * (F.mse_loss(p1, z2.detach()) + F.mse_loss(p2, z1.detach()))
+                    loss = 0.5 * (F.mse_loss(p1_o, z2_t) + F.mse_loss(p2_o, z1_t))
                 else:
-                    loss = 0.5 * (smooth_l1_loss(p1, z2.detach(), beta) + smooth_l1_loss(p2, z1.detach(), beta))
+                    loss = 0.5 * (smooth_l1_loss(p1_o, z2_t, beta) + smooth_l1_loss(p2_o, z1_t, beta))
 
+            # Update lr
+            for param_group in optimiser.param_groups:
+                param_group['lr'] = lrs[epoch]
+            # Update wd
+            for param_group in optimiser.param_groups:
+                if param_group['weight_decay'] != 0:
+                    param_group['weight_decay'] = wds[epoch]
 
             # Update online model
             scaler.scale(loss).backward()
@@ -94,22 +139,24 @@ def train(
         
         # Validation Pass
         with torch.no_grad():
-            epoch_val_losses = torch.zeros(len(val_loader), device=next(online_model.parameters()).device)
+            epoch_val_losses = torch.zeros(len(val_loader), device=device)
             for i, (images, _) in enumerate(val_loader):
                 with torch.cuda.amp.autocast():
+                    # Augment images
                     x1, x2 = augmentation(images), augmentation(images)
-                    y1, y2 = target_model(x1), online_model(x2)
-                    z1, z2 = target_model.project(y1), online_model.project(y2)
-                    p1, p2 = target_model.predict(z1), online_model.predict(z2)
+                    y1_t, y2_t = target_model(x1), target_model(x2)
+                    z1_t, z2_t = target_model.project(y1_t), target_model.project(y2_t)
+                    z1_t, z2_t = F.normalize(z1_t, dim=-1), F.normalize(z2_t, dim=-1)
 
-                    if normalise:
-                        z1, z2 = F.normalize(z1, dim=-1), F.normalize(z2, dim=-1)
-                        p1, p2 = F.normalize(p1, dim=-1), F.normalize(p2, dim=-1)
+                    y1_o, y2_o = online_model(x1), online_model(x2)
+                    z1_o, z2_o = online_model.project(y1_o), online_model.project(y2_o)
+                    p1_o, p2_o = online_model.predict(z1_o), online_model.predict(z2_o)
+                    p1_o, p2_o = F.normalize(p1_o, dim=-1), F.normalize(p2_o, dim=-1)
 
                     if beta is None:
-                        loss = 0.5 * (F.mse_loss(p1, z2.detach()) + F.mse_loss(p2, z1.detach()))
+                        loss = 0.5 * (F.mse_loss(p1_o, z2_t) + F.mse_loss(p2_o, z1_t))
                     else:
-                        loss = 0.5 * (smooth_l1_loss(p1, z2.detach(), beta) + smooth_l1_loss(p2, z1.detach(), beta))
+                        loss = 0.5 * (smooth_l1_loss(p1_o, z2_t, beta) + smooth_l1_loss(p2_o, z1_t, beta))
 
                     epoch_val_losses[i] = loss.detach()
 

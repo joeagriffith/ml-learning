@@ -40,8 +40,8 @@ def train(
     # Initialise target model
     target_model = online_model.copy()
     # EMA schedule, cosine
-    start_tau=0.996,
-    end_tau = 1.0,
+    start_tau=0.996
+    end_tau = 1.0
     taus = cosine_schedule(start_tau, end_tau, num_epochs)
 
 # ============================== Data Handling ==============================

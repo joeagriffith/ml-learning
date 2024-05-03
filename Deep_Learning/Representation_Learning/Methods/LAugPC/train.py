@@ -27,7 +27,7 @@ def train(
     # LR schedule, warmup then cosine
     base_lr = optimiser.param_groups[0]['lr'] * batch_size / 256
     end_lr = 1e-6
-    warm_up_lrs = torch.linspace(0, base_lr, 10)
+    warm_up_lrs = torch.linspace(0, base_lr, 11)[1:]
     cosine_lrs = cosine_schedule(base_lr, end_lr, num_epochs-10)
     lrs = torch.cat([warm_up_lrs, cosine_lrs])
     assert len(lrs) == num_epochs
@@ -41,8 +41,8 @@ def train(
     # Initialise target model
     target_model = online_model.copy()
     # EMA schedule, cosine
-    start_tau=0.996,
-    end_tau = 1.0,
+    start_tau=0.996
+    end_tau = 1.0
     taus = cosine_schedule(start_tau, end_tau, num_epochs)
 
 #============================== Augmentation Parameters ==============================
@@ -98,6 +98,15 @@ def train(
         if epoch > 0:
             loop.set_postfix(postfix)
 
+        # Update lr
+        for param_group in optimiser.param_groups:
+            param_group['lr'] = lrs[epoch].item()
+        # Update wd
+        for param_group in optimiser.param_groups:
+            if param_group['weight_decay'] != 0:
+                param_group['weight_decay'] = wds[epoch].item()
+
+
         # Training Pass
         epoch_train_losses = torch.zeros(len(train_loader), device=device)
         for i, (images, _) in loop:
@@ -124,14 +133,6 @@ def train(
                     loss = F.mse_loss(pred, target)
                 else:
                     loss = smooth_l1_loss(pred, target, beta)
-
-            # Update lr
-            for param_group in optimiser.param_groups:
-                param_group['lr'] = lrs[epoch]
-            # Update wd
-            for param_group in optimiser.param_groups:
-                if param_group['weight_decay'] != 0:
-                    param_group['weight_decay'] = wds[epoch]
 
             # Update online model
             scaler.scale(loss).backward()

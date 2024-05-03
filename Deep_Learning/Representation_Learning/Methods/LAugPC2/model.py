@@ -84,14 +84,16 @@ class LAugPC2(nn.Module):
         for net in self.gen_nets:
             z = net(z)
             preds.append(z)
-        return preds[::-1]
+        return preds
 
-    def get_target(self, x):
+    def get_targets(self, x):
+        assert self.backbone == 'alexnet', 'get_targets only implemented for alexnet'
         xs = [x]
         for module in self.encoder.features:
             x = module(x)
             if isinstance(module, nn.MaxPool2d):
                 xs.append(x)
+        xs.append(self.encoder.avgpool(x))
         return xs
 
     def forward(self, x):
@@ -105,8 +107,8 @@ class LAugPC2(nn.Module):
         z = self.encoder(x)
         a = self.action_encoder(a)
         z_pred = self.transition(torch.cat([z, a], dim=1))
-        pred = self.generate(z_pred)
-        return pred
+        preds = self.generate(z_pred)
+        return preds
     
     def copy(self):
         model = LAugPC2(self.in_features, self.num_actions, self.backbone)

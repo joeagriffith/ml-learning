@@ -21,7 +21,7 @@ class DINO(nn.Module):
             self.encoder.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.encoder.classifier = nn.Flatten()
             self.num_features = 256
-        elif backbone == 'vit_b_16':
+        elif backbone == 'vit':
             self.encoder = VisionTransformer(
                 image_size=28,
                 patch_size=7,
@@ -33,15 +33,17 @@ class DINO(nn.Module):
             self.encoder.conv_proj = nn.Conv2d(in_features, 256, kernel_size=(7, 7), stride=(7, 7), padding=(0, 0))
             self.encoder.heads = nn.Identity()
             self.num_features = 256
+        else:
+            raise ValueError(f'backbone must be one of ["resnet18", "alexnet", "vit"], got {backbone}')
 
 
         self.project = nn.Sequential(
             # MLP
             nn.Linear(self.num_features, 1024, bias=False),
             nn.GELU(),
-            nn.Linear(self.num_features, 1024, bias=False),
+            nn.Linear(1024, 1024, bias=False),
             nn.GELU(),
-            nn.Linear(self.num_features, 1024, bias=False),
+            nn.Linear(1024, 1024, bias=False),
 
             # LayerNorm
             nn.LayerNorm(1024, elementwise_affine=False),

@@ -3,9 +3,44 @@ import torch.nn.functional as F
 import torchvision.transforms.v2.functional as F_v2
 from tqdm import tqdm
 
-from Deep_Learning.Representation_Learning.Utils.functional import cosine_schedule, smooth_l1_loss
+from Deep_Learning.Representation_Learning.Utils.functional import cosine_schedule
 from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import single_step_classification_eval, get_ss_mnist_loaders
 
+class DINOLoss(torch.nn.Module):
+
+    def __init__(self, num_epochs, num_features, C_mom=0.9, device='cpu'):
+        super().__init__()
+        # Temperature schedule
+        self.tmp_s = torch.ones(num_epochs) * 0.1
+        self.tmp_t = torch.cat([torch.linspace(0.04, 0.07, 30), torch.ones(num_epochs-30) * 0.07])
+
+        # Initialise C
+        self.C = torch.zeros((1, num_features), device=device)
+        self.C_mom = C_mom
+    
+    def update_C(self, target):
+        # t1, t2: (batch_size, num_features)
+        # update C
+        self.C = self.C_mom * self.C + (1 - self.C_mom) * target.mean(0, keepdim=True)
+
+    def forward(self, pred, target, epoch):
+        # s1, s2, t1, t2: (batch_size, num_features)
+
+        tmp_s, tmp_t = self.tmp_s[epoch], self.tmp_t[epoch]
+
+        # Convert to probabilities
+        # (batch_size, num_features) -> (batch_size, num_features)
+        pred = F.softmax(pred / tmp_s, dim=-1)
+        target = F.softmax((target - self.C) / tmp_t, dim=-1)
+
+        # Update C
+        self.update_C(target)
+
+        # # Calculate loss for CLS tokens across different images
+        # (batch_size, num_features) -> (1,)
+        loss = - (target * pred.log()).sum(-1).mean()
+
+        return loss
 
 def train(
         online_model,
@@ -14,7 +49,6 @@ def train(
         val_dataset,
         num_epochs,
         batch_size,
-        beta=None,
         aug_scaler='none',
         learn_on_ss=False,
         writer=None,
@@ -73,10 +107,12 @@ def train(
     train_options = {
         'num_epochs': num_epochs,
         'batch_size': batch_size,
-        'beta': beta,
         'aug_scaler': aug_scaler,
         'learn_on_ss': learn_on_ss,
     }
+
+    dino = DINOLoss(num_epochs, online_model.num_features, C_mom=0.9, device=device)
+    loss_fn = lambda x, y: dino(x, y, epoch)
 
     # Log training options, model details, and optimiser details
     if writer is not None:
@@ -124,15 +160,10 @@ def train(
                     images_aug = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
                     target = target_model(images_aug)
                 pred = online_model.predict(images, action)
-                
-                # Normalise
-                target = F.normalize(target, dim=-1)
-                pred = F.normalize(pred, dim=-1)
 
-                if beta is None:
-                    loss = F.mse_loss(pred, target)
-                else:
-                    loss = smooth_l1_loss(pred, target, beta)
+            pred = F.normalize(pred, dim=1)
+            target = F.normalize(target, dim=1)
+            loss = loss_fn(pred, target)
 
             # Update online model
             scaler.scale(loss).backward()
@@ -165,14 +196,7 @@ def train(
                     target = target_model(images_aug)
                     pred = online_model.predict(images, action)
 
-                    # Normalise
-                    target = F.normalize(target, dim=-1)
-                    pred = F.normalize(pred, dim=-1)
-
-                    if beta is None:
-                        loss = F.mse_loss(pred, target)
-                    else:
-                        loss = smooth_l1_loss(pred, target, beta)
+                    loss = loss_fn(pred, target)
 
                     epoch_val_losses[i] = loss.detach()
 

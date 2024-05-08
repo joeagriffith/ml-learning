@@ -22,6 +22,25 @@ class LAugPC(nn.Module):
             self.encoder.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.encoder.classifier = nn.Flatten()
             self.num_features = 256
+        elif backbone == 'mnist_cnn':
+            self.encoder = nn.Sequential(
+                nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.ReLU(),
+
+                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.ReLU(),
+
+                nn.Conv2d(64, 128, kernel_size=3, stride=1),
+                nn.ReLU(),
+                nn.Conv2d(128, 256, kernel_size=3, stride=1),
+                nn.ReLU(),
+                nn.Conv2d(256, 256, kernel_size=3, stride=1),
+                nn.ReLU(),
+                nn.Flatten(),
+            )
+            self.num_features = 256
 
         self.action_encoder = nn.Sequential(
             nn.Linear(num_actions, 512),

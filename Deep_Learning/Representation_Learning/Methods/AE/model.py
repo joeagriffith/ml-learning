@@ -4,11 +4,10 @@ import torch.nn as nn
 from torchvision.models import resnet18, alexnet
 from rvit import RegisteredVisionTransformer
 
-class AugPC(nn.Module):
-    def __init__(self, in_features, num_actions, backbone='resnet18'):
+class AE(nn.Module):
+    def __init__(self, in_features, backbone='resnet18'):
         super().__init__()
         self.in_features = in_features
-        self.num_actions = num_actions
         self.backbone = backbone
 
         # MNIST ONLY
@@ -30,9 +29,8 @@ class AugPC(nn.Module):
             self.encoder = resnet18()
             self.encoder.conv1 = nn.Conv2d(in_features, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
             self.encoder.maxpool = nn.Identity()
-            # self.encoder.fc = nn.Flatten()
-            self.encoder.fc = nn.Linear(512, 256)
-            self.num_features = 256
+            self.encoder.fc = nn.Flatten() # Actually performs better without this line
+            self.num_features = 512
 
         elif backbone == 'alexnet':
             self.encoder = alexnet()
@@ -66,22 +64,6 @@ class AugPC(nn.Module):
                 nn.Flatten(),
             )
             self.num_features = 256
-    
-        self.action_encoder = nn.Sequential(
-            nn.Linear(num_actions, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-        )
-
-        # NO BATCHNORM
-        self.transition = nn.Sequential(
-            nn.Linear(self.num_features + 128, 1024, bias=False),
-            nn.ReLU(),
-            nn.Linear(1024, 512, bias=False),
-            nn.ReLU(),
-            nn.Linear(512, self.num_features, bias=False)
-        )
 
         #for Mnist (-1, 1, 28, 28)
         # No BN, makes it worse
@@ -101,19 +83,13 @@ class AugPC(nn.Module):
             nn.ReLU(),
 
             nn.Conv2d(64, 1, 3, 1, 1),
-            # nn.Sigmoid(),
         )
 
     def forward(self, x):
         z = self.encoder(x)
         return z
     
-    def predict(self, x, a=None):
-        if a is None:
-            a = torch.zeros(x.shape[0], self.num_actions, device=x.device)
-        
+    def reconstruct(self, x):
         z = self.encoder(x)
-        a = self.action_encoder(a)
-        z_pred = self.transition(torch.cat([z, a], dim=1))
-        pred = self.decoder(z_pred)
+        pred = self.decoder(z)
         return pred

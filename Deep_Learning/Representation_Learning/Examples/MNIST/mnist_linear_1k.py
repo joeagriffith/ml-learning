@@ -115,7 +115,7 @@ def mnist_linear_1k_eval(
     print(f'Best validation accuracy: {best_val_acc.item()}')
 
 
-def get_ss_mnist_loaders(batch_size, device):
+def get_ss_mnist_loaders(batch_size, device=torch.device('cpu')):
     # # Prepare data for single step classification eval
     # Load data
     t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)

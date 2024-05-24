@@ -7,11 +7,11 @@ from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import
 
 class DINOLoss(torch.nn.Module):
 
-    def __init__(self, num_epochs, num_features, C_mom=0.9, device='cpu'):
+    def __init__(self, num_epochs, num_features, C_mom=0.9, scale_temps=1.0, device='cpu'):
         super().__init__()
         # Temperature schedule
-        self.tmp_s = torch.ones(num_epochs) * 0.1
-        self.tmp_t = torch.cat([torch.linspace(0.04, 0.07, 30), torch.ones(num_epochs-30) * 0.07])
+        self.tmp_s = torch.ones(num_epochs) * 0.1 * scale_temps
+        self.tmp_t = torch.cat([torch.linspace(0.04, 0.07, 30) * scale_temps, torch.ones(num_epochs-30) * 0.07 * scale_temps])
 
         # Initialise C
         self.C = torch.zeros((1, num_features), device=device)
@@ -52,6 +52,7 @@ def train(
         num_epochs,
         batch_size,
         augmentation,
+        scale_temps=1.0,
         learn_on_ss=False,
         writer=None,
         save_dir=None,
@@ -63,9 +64,10 @@ def train(
     # LR schedule, warmup then cosine
     base_lr = optimiser.param_groups[0]['lr'] * batch_size / 256
     end_lr = 1e-6
-    warm_up_lrs = torch.linspace(0, base_lr, 10)
+    warm_up_lrs = torch.linspace(0, base_lr, 11)[1:]
     cosine_lrs = cosine_schedule(base_lr, end_lr, num_epochs-10)
     lrs = torch.cat([warm_up_lrs, cosine_lrs])
+    lrs = torch.ones(num_epochs) * base_lr
     assert len(lrs) == num_epochs
 
     # WD schedule, cosine 
@@ -94,7 +96,7 @@ def train(
     scaler = torch.cuda.amp.GradScaler()
 
     # Initialise loss function
-    loss_fn = DINOLoss(num_epochs, student_model.num_features, C_mom=0.9, device=device)
+    loss_fn = DINOLoss(num_epochs, student_model.num_features, C_mom=0.9, scale_temps=scale_temps, device=device)
 
     # Log training options
     train_options = {
@@ -124,14 +126,21 @@ def train(
         if epoch > 0:
             loop.set_postfix(postfix)
 
+        # Update lr
+        for param_group in optimiser.param_groups:
+            param_group['lr'] = lrs[epoch].item()
+        # Update wd
+        for param_group in optimiser.param_groups:
+            if param_group['weight_decay'] != 0:
+                param_group['weight_decay'] = wds[epoch].item()
+
         # Training Pass
         epoch_train_losses = torch.zeros(len(train_loader), device=device)
         for i, (images, _) in loop:
             with torch.cuda.amp.autocast():
-                # Augment images
-                x1, x2 = augmentation(images), augmentation(images)
-                
                 with torch.no_grad():
+                    # Augment images
+                    x1, x2 = augmentation(images), augmentation(images)
                     t1, t2 = teacher_model(x1), teacher_model(x2)
                     t1_p, t2_p = teacher_model.project(t1), teacher_model.project(t2)
 
@@ -140,13 +149,6 @@ def train(
 
                 loss = loss_fn(s1_p, s2_p, t1_p, t2_p, epoch)
 
-            # Update lr
-            for param_group in optimiser.param_groups:
-                param_group['lr'] = lrs[epoch]
-            # Update wd
-            for param_group in optimiser.param_groups:
-                if param_group['weight_decay'] != 0:
-                    param_group['weight_decay'] = wds[epoch]
 
             # Update online model
             scaler.scale(loss).backward()

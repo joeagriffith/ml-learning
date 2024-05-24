@@ -16,8 +16,6 @@ def train(
         num_epochs,
         batch_size,
         beta=None,
-        train_aug_scaler='none',
-        val_aug_scaler='none',
         learn_on_ss=False,
         writer=None,
         save_dir=None,
@@ -40,35 +38,8 @@ def train(
     end_wd = 0.4
     wds = cosine_schedule(start_wd, end_wd, num_epochs)
 
-#============================== Augmentation Parameters ==============================
-    # Initialise augmentation probabilty schedule
-    assert train_aug_scaler in ['linear', 'exp', 'cosine', 'zeros', 'none'], 'aug_scaler must be one of ["linear", "exp", "cosine", "zeros", "none"]'
-    if train_aug_scaler == 'linear':
-        aug_ps = torch.linspace(0.0, 0.25, num_epochs)
-    elif train_aug_scaler == 'exp':
-        aug_ps = 0.25 * (1.0 - torch.exp(torch.linspace(0, -5, num_epochs)))
-    elif train_aug_scaler == 'cosine':
-        aug_ps = cosine_schedule(0.0, 0.25, num_epochs)
-    elif train_aug_scaler == 'zeros':
-        aug_ps = torch.zeros(num_epochs)
-    elif train_aug_scaler == 'none':
-        aug_ps = 0.25 * torch.ones(num_epochs)
-    
-    # Initialise validation augmentation probabilty schedule
-    assert val_aug_scaler in ['linear', 'exp', 'cosine', 'none', 'zeros'], 'aug_scaler must be one of ["linear", "exp", "cosine", "zeros", "none"]'
-    if val_aug_scaler == 'linear':
-        val_aug_ps = torch.linspace(0, 0.30, num_epochs)
-    elif val_aug_scaler == 'exp':
-        val_aug_ps = 0.25 * (1.0 - torch.exp(torch.linspace(0, -5, num_epochs)))
-    elif val_aug_scaler == 'cosine':
-        val_aug_ps = cosine_schedule(0.0, 0.30, num_epochs)
-    elif val_aug_scaler == 'zeros':
-        val_aug_ps = torch.zeros(num_epochs)
-    elif val_aug_scaler == 'none':
-        val_aug_ps = 0.25 * torch.ones(num_epochs)
-    
 # ============================== Data Handling ==============================
-    ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device=device)
+    ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -80,8 +51,6 @@ def train(
         'num_epochs': num_epochs,
         'batch_size': batch_size,
         'beta': beta,
-        'train_aug_scaler': train_aug_scaler,
-        'val_aug_scaler': val_aug_scaler,
     }
 
     # Log training options, model details, and optimiser details
@@ -103,7 +72,6 @@ def train(
 
 # ============================== Training Loop ==============================
     for epoch in range(num_epochs):
-        model.train()
         train_dataset.apply_transform(batch_size=batch_size)
         loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
         loop.set_description(f'Epoch [{epoch}/{num_epochs}]')
@@ -121,23 +89,14 @@ def train(
         # Training Pass
         epoch_train_losses = torch.zeros(len(train_loader), device=device)
         for i, (images, _) in loop:
-            # Sample Action
-            act_p = torch.rand(5) # whether to apply each augmentation
-            angle = torch.rand(1).item() * 360 - 180 if act_p[0] < aug_ps[epoch] else 0
-            translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < aug_ps[epoch] else 0
-            translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] < aug_ps[epoch] else 0
-            scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] < aug_ps[epoch] else 1.0
-            shear = torch.rand(1).item() * 50 - 25 if act_p[4] < aug_ps[epoch] else 0
-            targets = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
-            action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
 
             with torch.cuda.amp.autocast():
-                preds = model.predict(images, action)
+                preds = model.reconstruct(images)
 
                 if beta is None:
-                    loss = F.mse_loss(preds, targets)
+                    loss = F.mse_loss(preds, images)
                 else:
-                    loss = smooth_l1_loss(preds, targets, beta)
+                    loss = smooth_l1_loss(preds, images, beta)
 
             # Update model
             scaler.scale(loss).backward()
@@ -148,28 +107,17 @@ def train(
             epoch_train_losses[i] = loss.detach()
         
         # Validation Pass
-        model.eval()
         with torch.no_grad():
             epoch_val_losses = torch.zeros(len(val_loader), device=device)
             for i, (images, _) in enumerate(val_loader):
 
-                # Create Target Image and Action vector
-                act_p = torch.rand(5) # whether to apply each augmentation
-                angle = torch.rand(1).item() * 360 - 180 if act_p[0] < val_aug_ps[epoch] else 0
-                translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < val_aug_ps[epoch] else 0
-                translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] < val_aug_ps[epoch] else 0
-                scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] < val_aug_ps[epoch] else 1.0
-                shear = torch.rand(1).item() * 50 - 25 if act_p[4] < val_aug_ps[epoch] else 0
-                targets = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
-                action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
-
                 with torch.cuda.amp.autocast():
-                    preds = model.predict(images, action)
+                    preds = model.reconstruct(images)
 
                     if beta is None:
-                        loss = F.mse_loss(preds, targets)
+                        loss = F.mse_loss(preds, images)
                     else:
-                        loss = smooth_l1_loss(preds, targets, beta)
+                        loss = smooth_l1_loss(preds, images, beta)
 
                 epoch_val_losses[i] = loss.detach()
 

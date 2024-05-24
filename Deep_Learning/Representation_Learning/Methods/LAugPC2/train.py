@@ -116,11 +116,13 @@ def train(
         for i, (images, _) in loop:
             with torch.cuda.amp.autocast():
                 # Sample Action
-                angle = torch.rand(1).item() * 360 - 180 if torch.rand(1).item() < aug_ps[epoch] else 0
-                translate_x = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() < aug_ps[epoch] else 0
-                translate_y = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() < aug_ps[epoch] else 0
-                scale = torch.rand(1).item() * 0.5 + 0.75 if torch.rand(1).item() < aug_ps[epoch] else 1.0
-                shear = torch.rand(1).item() * 50 - 25 if torch.rand(1).item() < aug_ps[epoch] else 0
+                act_p = torch.rand(5) # whether to apply each augmentation
+                angle = torch.rand(1).item() * 360 - 180 if act_p[0] < aug_ps[epoch] else 0
+                translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < aug_ps[epoch] else 0
+                translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] < aug_ps[epoch] else 0
+                scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] < aug_ps[epoch] else 1.0
+                shear = torch.rand(1).item() * 50 - 25 if act_p[4] < aug_ps[epoch] else 0
+                targets = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
                 action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
 
                 with torch.no_grad():
@@ -163,11 +165,13 @@ def train(
             for i, (images, _) in enumerate(val_loader):
                 with torch.cuda.amp.autocast():
                     # Sample Action
-                    angle = torch.rand(1).item() * 360 - 180 if torch.rand(1).item() < aug_ps[epoch] else 0
-                    translate_x = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() < aug_ps[epoch] else 0
-                    translate_y = torch.randint(-8, 9, (1,)).item() if torch.rand(1).item() < aug_ps[epoch] else 0
-                    scale = torch.rand(1).item() * 0.5 + 0.75 if torch.rand(1).item() < aug_ps[epoch] else 1.0
-                    shear = torch.rand(1).item() * 50 - 25 if torch.rand(1).item() < aug_ps[epoch] else 0
+                    act_p = torch.rand(5)
+                    angle = torch.rand(1).item() * 360 - 180 if act_p[0] > 0.75 else 0
+                    translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] > 0.75 else 0
+                    translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] > 0.75 else 0
+                    scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] > 0.75 else 1.0
+                    shear = torch.rand(1).item() * 50 - 25 if act_p[4] > 0.75 else 0
+                    images_aug = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
                     action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
 
                     # Augment images and encode

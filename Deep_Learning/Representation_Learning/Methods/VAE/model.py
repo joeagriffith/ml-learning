@@ -4,11 +4,10 @@ import torch.nn as nn
 from torchvision.models import resnet18, alexnet
 from rvit import RegisteredVisionTransformer
 
-class AugPC(nn.Module):
-    def __init__(self, in_features, num_actions, backbone='resnet18'):
+class VAE(nn.Module):
+    def __init__(self, in_features, z_dim, backbone='resnet18'):
         super().__init__()
         self.in_features = in_features
-        self.num_actions = num_actions
         self.backbone = backbone
 
         # MNIST ONLY
@@ -24,22 +23,21 @@ class AugPC(nn.Module):
             )
             self.encoder.conv_proj = nn.Conv2d(1, 256, kernel_size=7, stride=7)
             self.encoder.heads = nn.Identity()
-            self.num_features = 256
+            self.h_dim = 256
 
         elif backbone == 'resnet18':
             self.encoder = resnet18()
             self.encoder.conv1 = nn.Conv2d(in_features, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
             self.encoder.maxpool = nn.Identity()
-            # self.encoder.fc = nn.Flatten()
-            self.encoder.fc = nn.Linear(512, 256)
-            self.num_features = 256
+            self.encoder.fc = nn.Flatten() # Actually performs better without this line
+            self.h_dim = 512
 
         elif backbone == 'alexnet':
             self.encoder = alexnet()
             self.encoder.features[0] = nn.Conv2d(in_features, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
             self.encoder.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.encoder.classifier = nn.Flatten()
-            self.num_features = 256
+            self.h_dim = 256
 
         elif backbone == 'mnist_cnn':
             self.encoder = nn.Sequential(
@@ -65,30 +63,20 @@ class AugPC(nn.Module):
                 nn.ReLU(),
                 nn.Flatten(),
             )
-            self.num_features = 256
-    
-        self.action_encoder = nn.Sequential(
-            nn.Linear(num_actions, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-        )
-
-        # NO BATCHNORM
-        self.transition = nn.Sequential(
-            nn.Linear(self.num_features + 128, 1024, bias=False),
-            nn.ReLU(),
-            nn.Linear(1024, 512, bias=False),
-            nn.ReLU(),
-            nn.Linear(512, self.num_features, bias=False)
-        )
+            self.h_dim = 256
+        
+        self.num_features = z_dim
+        
+        self.mu = nn.Linear(self.h_dim, z_dim)
+        self.logVar = nn.Linear(self.h_dim, z_dim)
+        self.z2h = nn.Linear(z_dim, self.h_dim)
 
         #for Mnist (-1, 1, 28, 28)
         # No BN, makes it worse
         self.decoder = nn.Sequential(
-            nn.Unflatten(1, (self.num_features, 1, 1)),
+            nn.Unflatten(1, (self.h_dim, 1, 1)),
 
-            nn.ConvTranspose2d(self.num_features, 512, 3, 1),
+            nn.ConvTranspose2d(self.h_dim, 512, 3, 1),
             nn.ReLU(),
 
             nn.ConvTranspose2d(512, 256, 3, 3),
@@ -101,19 +89,21 @@ class AugPC(nn.Module):
             nn.ReLU(),
 
             nn.Conv2d(64, 1, 3, 1, 1),
-            # nn.Sigmoid(),
         )
 
     def forward(self, x):
-        z = self.encoder(x)
-        return z
+        h = self.encoder(x)
+        return self.mu(h)
     
-    def predict(self, x, a=None):
-        if a is None:
-            a = torch.zeros(x.shape[0], self.num_actions, device=x.device)
-        
-        z = self.encoder(x)
-        a = self.action_encoder(a)
-        z_pred = self.transition(torch.cat([z, a], dim=1))
-        pred = self.decoder(z_pred)
-        return pred
+    def reparameterise(self, mu, logVar):
+        std = torch.exp(0.5 * logVar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    def reconstruct(self, x):
+        h = self.encoder(x)
+        mu, logVar = self.mu(h), self.logVar(h)
+        z = self.reparameterise(mu, logVar)
+        h = self.z2h(z)
+        x_hat = self.decoder(h) 
+        return x_hat, mu, logVar

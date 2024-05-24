@@ -33,8 +33,33 @@ class DINO(nn.Module):
             self.encoder.conv_proj = nn.Conv2d(in_features, 256, kernel_size=(7, 7), stride=(7, 7), padding=(0, 0))
             self.encoder.heads = nn.Identity()
             self.num_features = 256
+        elif backbone == 'mnist_cnn':
+            self.encoder = nn.Sequential(
+                nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+
+                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                nn.Conv2d(64, 128, kernel_size=3, stride=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+
+                nn.Conv2d(128, 256, kernel_size=3, stride=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+
+                nn.Conv2d(256, 256, kernel_size=3, stride=1),
+                nn.ReLU(),
+                nn.Flatten(),
+            )
+            self.num_features = 256
         else:
-            raise ValueError(f'backbone must be one of ["resnet18", "alexnet", "vit"], got {backbone}')
+            raise ValueError(f'backbone must be one of ["resnet18", "alexnet", "vit", "mnist_cnn"], got {backbone}')
 
 
         self.project = nn.Sequential(

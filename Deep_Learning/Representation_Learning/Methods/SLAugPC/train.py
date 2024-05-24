@@ -8,7 +8,7 @@ from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import
 
 class DINOLoss(torch.nn.Module):
 
-    def __init__(self, num_epochs, num_features, C_mom=0.85, device='cpu'):
+    def __init__(self, num_epochs, num_features, C_mom=0.9, device='cpu'):
         super().__init__()
         # Temperature schedule
         self.tmp_s = torch.ones(num_epochs) * 0.1
@@ -55,6 +55,8 @@ def train(
         batch_size,
         train_aug_scaler='none',
         val_aug_scaler='none',
+        start_tau=0.996,
+        end_tau =1.0,
         learn_on_ss=False,
         writer=None,
         save_dir=None,
@@ -72,16 +74,16 @@ def train(
     assert len(lrs) == num_epochs
 
     # WD schedule, cosine 
-    start_wd = 0.04
-    end_wd = 0.4
+    start_wd = 0.1 # 0.04
+    end_wd = 0.1 # 0.4
     wds = cosine_schedule(start_wd, end_wd, num_epochs)
     
 #============================== Target Model Learning Parameters ==============================
     # Initialise target model
     target_model = online_model.copy()
     # EMA schedule, cosine
-    start_tau=0.996
-    end_tau =1.0
+    start_tau=start_tau
+    end_tau =end_tau
     taus = cosine_schedule(start_tau, end_tau, num_epochs)
 
 #============================== Augmentation Parameters ==============================
@@ -131,9 +133,11 @@ def train(
         'train_aug_scaler': train_aug_scaler,
         'val_aug_scaler': val_aug_scaler,
         'learn_on_ss': learn_on_ss,
+        'start_tau': start_tau,
+        'end_tau': end_tau,
     }
 
-    dino = DINOLoss(num_epochs, online_model.num_features, device=device)
+    dino = DINOLoss(num_epochs, online_model.num_features, C_mom=0.9, device=device)
     loss_fn = lambda x, y: dino(x, y, epoch)
 
     # Log training options, model details, and optimiser details
@@ -181,9 +185,8 @@ def train(
                 action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
                 with torch.no_grad():
                     # Augment images and encode
-                    # targets = target_model(images_aug)/
+                    targets = target_model(images_aug)
                     # targets = target_model.predict(images_aug)
-                    targets = target_model.get_targets(images_aug)
                 preds = online_model.predict(images, action)
 
                 preds = F.normalize(preds, dim=1)
@@ -219,9 +222,9 @@ def train(
                     images_aug = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
                     action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
 
-                    # targets = target_model(images_aug)
+                    targets = target_model(images_aug)
                     # targets = target_model.predict(images_aug)
-                    targets = target_model.get_targets(images_aug)
+
                     preds = online_model.predict(images, action)
 
                     preds = F.normalize(preds, dim=1)

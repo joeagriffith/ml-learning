@@ -85,6 +85,13 @@ def train(
         if epoch > 0:
             loop.set_postfix(postfix)
 
+        # Update lr
+        for param_group in optimiser.param_groups:
+            param_group['lr'] = lrs[epoch].item()
+        # Update wd
+        for param_group in optimiser.param_groups:
+            if param_group['weight_decay'] != 0:
+                param_group['weight_decay'] = wds[epoch].item()
         # Training Pass
         epoch_train_losses = torch.zeros(len(train_loader), device=device)
         for i, (images, _) in loop:
@@ -106,13 +113,6 @@ def train(
                 else:
                     loss = 0.5 * (smooth_l1_loss(p1_o, z2_t, beta) + smooth_l1_loss(p2_o, z1_t, beta))
 
-            # Update lr
-            for param_group in optimiser.param_groups:
-                param_group['lr'] = lrs[epoch]
-            # Update wd
-            for param_group in optimiser.param_groups:
-                if param_group['weight_decay'] != 0:
-                    param_group['weight_decay'] = wds[epoch]
 
             # Update online model
             scaler.scale(loss).backward()

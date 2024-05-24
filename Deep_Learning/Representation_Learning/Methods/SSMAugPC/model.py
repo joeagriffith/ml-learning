@@ -4,7 +4,7 @@ import torch.nn as nn
 from torchvision.models import resnet18, alexnet
 from rvit import RegisteredVisionTransformer
 
-class AugPC(nn.Module):
+class SSMAugPC(nn.Module):
     def __init__(self, in_features, num_actions, backbone='resnet18'):
         super().__init__()
         self.in_features = in_features
@@ -66,26 +66,25 @@ class AugPC(nn.Module):
                 nn.Flatten(),
             )
             self.num_features = 256
-    
-        self.action_encoder = nn.Sequential(
-            nn.Linear(num_actions, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-        )
 
         # NO BATCHNORM
-        self.transition = nn.Sequential(
-            nn.Linear(self.num_features + 128, 1024, bias=False),
+        self.A = nn.Sequential(
+            nn.Linear(self.num_features, 1024, bias=False),
             nn.ReLU(),
             nn.Linear(1024, 512, bias=False),
             nn.ReLU(),
             nn.Linear(512, self.num_features, bias=False)
         )
+    
+        self.B = nn.Sequential(
+            nn.Linear(num_actions, 128),
+            nn.ReLU(),
+            nn.Linear(128, self.num_features),
+        )
 
         #for Mnist (-1, 1, 28, 28)
         # No BN, makes it worse
-        self.decoder = nn.Sequential(
+        self.C = nn.Sequential(
             nn.Unflatten(1, (self.num_features, 1, 1)),
 
             nn.ConvTranspose2d(self.num_features, 512, 3, 1),
@@ -104,6 +103,7 @@ class AugPC(nn.Module):
             # nn.Sigmoid(),
         )
 
+
     def forward(self, x):
         z = self.encoder(x)
         return z
@@ -113,7 +113,7 @@ class AugPC(nn.Module):
             a = torch.zeros(x.shape[0], self.num_actions, device=x.device)
         
         z = self.encoder(x)
-        a = self.action_encoder(a)
-        z_pred = self.transition(torch.cat([z, a], dim=1))
-        pred = self.decoder(z_pred)
+        d_z_pred = self.A(z) + self.B(a)
+        z_pred = z.detach() + d_z_pred
+        pred = self.C(z_pred)
         return pred

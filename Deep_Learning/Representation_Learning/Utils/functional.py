@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import torchvision.transforms.v2.functional as F_v2
 import math
 
 def NTXent(z:torch.Tensor, temperature:float=0.5):
@@ -82,3 +83,16 @@ def get_optimiser(model, optimiser, lr, wd, exclude_bias=True, exclude_bn=True, 
 
 def cosine_schedule(base, end, T):
     return end - (end - base) * ((torch.arange(0, T, 1) * math.pi / T).cos() + 1) / 2
+
+def augment(images, p):    
+    # Sample Action
+    act_p = torch.rand(5) # whether to apply each augmentation
+    angle = torch.rand(1).item() * 360 - 180 if act_p[0] < p else 0
+    translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < p else 0
+    translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] < p else 0
+    scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] < p else 1.0
+    shear = torch.rand(1).item() * 50 - 25 if act_p[4] < p else 0
+    images_aug = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
+    action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
+
+    return images_aug, action

@@ -25,7 +25,7 @@ class LAugPC(nn.Module):
             self.encoder.conv_proj = nn.Conv2d(1, 256, kernel_size=7, stride=7)
             self.encoder.heads = nn.Identity()
             self.num_features = 256
-        if backbone == 'resnet18':
+        elif backbone == 'resnet18':
             self.encoder = resnet18()
             self.encoder.conv1 = nn.Conv2d(in_features, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
             self.encoder.maxpool = nn.Identity()

@@ -188,7 +188,8 @@ def train(
 
                 preds = F.normalize(preds, dim=1)
                 targets = F.normalize(targets, dim=1)
-                loss = loss_fn(preds, targets)
+                # loss = loss_fn(preds, targets)
+                loss = F.mse_loss(preds, targets)
 
             # Update online model
             scaler.scale(loss).backward()
@@ -226,7 +227,8 @@ def train(
 
                     preds = F.normalize(preds, dim=1)
                     targets = F.normalize(targets, dim=1)
-                    loss = loss_fn(preds, targets)
+                    # loss = loss_fn(preds, targets)
+                    loss = F.mse_loss(preds, targets)
 
                     epoch_val_losses[i] = loss
 

@@ -14,8 +14,10 @@ def mnist_linear_1k_eval(
     model: nn.Module,
     writer: SummaryWriter = None,
     flatten: bool = False,
+    test: bool = False,
 ):
     device = next(model.parameters()).device
+    model.eval()
 
     # Create classifier and specify training parameters
     classifier = nn.Linear(model.num_features, 10, bias=False).to(device)
@@ -25,10 +27,10 @@ def mnist_linear_1k_eval(
     optimiser = torch.optim.AdamW(classifier.parameters(), lr=lr)
 
     # Load data
-    t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
     dataset = datasets.MNIST(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
+    _, val_dataset = torch.utils.data.random_split(dataset, [50000, 10000])
     train1k = PreloadedDataset.from_dataset(dataset, transforms.ToTensor(), device)
-    test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
+    val = PreloadedDataset.from_dataset(val_dataset, transforms.ToTensor(), device)
 
     # Reduce to 1000 samples, 100 from each class.
     indices = []
@@ -42,7 +44,7 @@ def mnist_linear_1k_eval(
 
     # Build data loaders
     train_loader = DataLoader(train1k, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False)
 
     scaler = torch.cuda.amp.GradScaler()
 
@@ -112,16 +114,35 @@ def mnist_linear_1k_eval(
         loop.set_postfix(postfix)
         loop.close()
 
+    if test:
+        t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
+        test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
+        test_loader = DataLoader(test, batch_size=100, shuffle=False)
+
+        test_accs = torch.zeros(len(test_loader), device=device)
+        with torch.no_grad():
+            for i, (x, y) in enumerate(test_loader):
+                if flatten:
+                    x = x.flatten(1)
+                with torch.cuda.amp.autocast():
+                    z = model(x)
+                    y_pred = classifier(z)
+                test_accs[i] = (y_pred.argmax(dim=1) == y).float().mean()
+
+        test_acc = test_accs.mean().item()
+        print(f'Test accuracy: {test_acc}')
+        writer.add_scalar('Classifier/test_acc', test_acc)
+
     print(f'Best validation accuracy: {best_val_acc.item()}')
 
 
 def get_ss_mnist_loaders(batch_size, device=torch.device('cpu')):
     # # Prepare data for single step classification eval
     # Load data
-    t_dataset = datasets.MNIST(root='../Datasets/', train=False, transform=transforms.ToTensor(), download=True)
     dataset = datasets.MNIST(root='../Datasets/', train=True, transform=transforms.ToTensor(), download=True)
     train1k = PreloadedDataset.from_dataset(dataset, transforms.ToTensor(), device)
-    test = PreloadedDataset.from_dataset(t_dataset, transforms.ToTensor(), device)
+    _, val_dataset = torch.utils.data.random_split(dataset, [50000, 10000])
+    val = PreloadedDataset.from_dataset(val_dataset, transforms.ToTensor(), device)
     # Reduce to 1000 samples, 100 from each class.
     indices = []
     for i in range(10):
@@ -133,7 +154,7 @@ def get_ss_mnist_loaders(batch_size, device=torch.device('cpu')):
     train1k.targets = train1k.targets[indices]
     # Build data loaders
     ss_train_loader = DataLoader(train1k, batch_size=100, shuffle=True)
-    ss_val_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
+    ss_val_loader = DataLoader(val, batch_size=batch_size, shuffle=False)
 
     return ss_train_loader, ss_val_loader
 

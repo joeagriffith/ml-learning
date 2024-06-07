@@ -5,7 +5,7 @@ import numpy as np
 #  alpha - learning rate / step size
 #  gamma - discount factor
 #  epsilon - probability to take random action (following epsilon-greedy approach)
-class Sarsa():
+class QL():
     def __init__(self, env, alpha, gamma, epsilon=None):
         self.env = env
         self.alpha = alpha
@@ -28,8 +28,8 @@ class Sarsa():
 
         if rand <= epsilon:
             return np.random.randint(0, self.env.action_space.n)
-        else:
-            return self.Q[state].argmax()
+        
+        return self.Q[state].argmax()
 
 
     #  Calculates the policy by a greedy policy
@@ -59,7 +59,7 @@ class Sarsa():
                 err = self.Q[state, action] - reward
                 #  Due to implementation of envs, we must make the condition that 'rewards after done = 0' explicit
                 if not done:
-                    err -= self.gamma * self.Q[state_1, action_1]
+                    err -= self.gamma * self.Q[state_1,:].max()
                 self.Q[state, action] -= self.alpha*err
 
                 state = state_1

@@ -3,9 +3,11 @@ import torch.nn as nn
 
 from torchvision.models import resnet18, alexnet
 from rvit import RegisteredVisionTransformer
+from Deep_Learning.Representation_Learning.Utils.nets import mnist_cnn_encoder, mnist_cnn_decoder
+
 
 class VAE(nn.Module):
-    def __init__(self, in_features, z_dim, backbone='resnet18'):
+    def __init__(self, in_features, z_dim, backbone='mnist_cnn'):
         super().__init__()
         self.in_features = in_features
         self.backbone = backbone
@@ -40,30 +42,8 @@ class VAE(nn.Module):
             self.h_dim = 256
 
         elif backbone == 'mnist_cnn':
-            self.encoder = nn.Sequential(
-                nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.BatchNorm2d(32),
-                nn.ReLU(),
-
-                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.BatchNorm2d(64),
-                nn.ReLU(),
-
-                nn.Conv2d(64, 128, kernel_size=3, stride=1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-
-                nn.Conv2d(128, 256, kernel_size=3, stride=1),
-                nn.BatchNorm2d(256),
-                nn.ReLU(),
-
-                nn.Conv2d(256, 256, kernel_size=3, stride=1),
-                nn.ReLU(),
-                nn.Flatten(),
-            )
             self.h_dim = 256
+            self.encoder = mnist_cnn_encoder(self.h_dim)
         
         self.num_features = z_dim
         
@@ -72,24 +52,7 @@ class VAE(nn.Module):
         self.z2h = nn.Linear(z_dim, self.h_dim)
 
         #for Mnist (-1, 1, 28, 28)
-        # No BN, makes it worse
-        self.decoder = nn.Sequential(
-            nn.Unflatten(1, (self.h_dim, 1, 1)),
-
-            nn.ConvTranspose2d(self.h_dim, 512, 3, 1),
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(512, 256, 3, 3),
-            nn.ReLU(),
-            
-            nn.ConvTranspose2d(256, 128, 3, 3),
-            nn.ReLU(),
-            
-            nn.ConvTranspose2d(128, 64, 2, 1),
-            nn.ReLU(),
-
-            nn.Conv2d(64, 1, 3, 1, 1),
-        )
+        self.decoder = mnist_cnn_decoder(self.h_dim)
 
     def forward(self, x):
         h = self.encoder(x)

@@ -3,9 +3,10 @@ import torch.nn as nn
 
 from torchvision.models import resnet18, alexnet
 from rvit import RegisteredVisionTransformer
+from Deep_Learning.Representation_Learning.Utils.nets import mnist_cnn_encoder, mnist_cnn_decoder
 
 class AugPC(nn.Module):
-    def __init__(self, in_features, num_actions, backbone='resnet18'):
+    def __init__(self, in_features, num_actions, backbone='mnist_cnn'):
         super().__init__()
         self.in_features = in_features
         self.num_actions = num_actions
@@ -42,30 +43,8 @@ class AugPC(nn.Module):
             self.num_features = 256
 
         elif backbone == 'mnist_cnn':
-            self.encoder = nn.Sequential(
-                nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.BatchNorm2d(32),
-                nn.ReLU(),
-
-                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.BatchNorm2d(64),
-                nn.ReLU(),
-
-                nn.Conv2d(64, 128, kernel_size=3, stride=1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-
-                nn.Conv2d(128, 256, kernel_size=3, stride=1),
-                nn.BatchNorm2d(256),
-                nn.ReLU(),
-
-                nn.Conv2d(256, 256, kernel_size=3, stride=1),
-                nn.ReLU(),
-                nn.Flatten(),
-            )
             self.num_features = 256
+            self.encoder = mnist_cnn_encoder(self.num_features)
     
         self.action_encoder = nn.Sequential(
             nn.Linear(num_actions, 128),
@@ -84,36 +63,26 @@ class AugPC(nn.Module):
         )
 
         #for Mnist (-1, 1, 28, 28)
-        # No BN, makes it worse
-        self.decoder = nn.Sequential(
-            nn.Unflatten(1, (self.num_features, 1, 1)),
+        self.decoder = mnist_cnn_decoder(self.num_features)
 
-            nn.ConvTranspose2d(self.num_features, 512, 3, 1),
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(512, 256, 3, 3),
-            nn.ReLU(),
-            
-            nn.ConvTranspose2d(256, 128, 3, 3),
-            nn.ReLU(),
-            
-            nn.ConvTranspose2d(128, 64, 2, 1),
-            nn.ReLU(),
-
-            nn.Conv2d(64, 1, 3, 1, 1),
-            # nn.Sigmoid(),
-        )
-
-    def forward(self, x):
-        z = self.encoder(x)
+    def forward(self, x, stop_at=None):
+        if self.backbone == 'mnist_cnn':
+            z = self.encoder(x, stop_at)
+        else:
+            z = self.encoder(x)
         return z
     
-    def predict(self, x, a=None):
+    def predict(self, x, a=None, stop_at=None):
         if a is None:
             a = torch.zeros(x.shape[0], self.num_actions, device=x.device)
         
         z = self.encoder(x)
         a = self.action_encoder(a)
         z_pred = self.transition(torch.cat([z, a], dim=1))
-        pred = self.decoder(z_pred)
+        pred = self.decoder(z_pred, stop_at)
         return pred
+    
+    def copy(self):
+        model = AugPC(self.in_features, self.num_actions, self.backbone).to(next(self.parameters()).device)
+        model.load_state_dict(self.state_dict())
+        return model

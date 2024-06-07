@@ -3,18 +3,19 @@ import torch.nn.functional as F
 import torchvision.transforms.v2.functional as F_v2
 from tqdm import tqdm
 from Deep_Learning.Representation_Learning.Examples.MNIST.mnist_linear_1k import single_step_classification_eval, get_ss_mnist_loaders
-from Deep_Learning.Representation_Learning.Utils.functional import smooth_l1_loss, cosine_schedule
+from Deep_Learning.Representation_Learning.Utils.functional import smooth_l1_loss, cosine_schedule, augment
 
 import os
 
 
 def train(
-        model,
+        online_model,
         optimiser,
         train_dataset,
         val_dataset,
         num_epochs,
         batch_size,
+        stop_at,
         beta=None,
         train_aug_scaler='none',
         val_aug_scaler='none',
@@ -24,7 +25,7 @@ def train(
         save_every=1,
 ):
 
-    device = next(model.parameters()).device
+    device = next(online_model.parameters()).device
 
 #============================== Online Model Learning Parameters ==============================
     # LR schedule, warmup then cosine
@@ -67,6 +68,14 @@ def train(
     elif val_aug_scaler == 'none':
         val_aug_ps = 0.25 * torch.ones(num_epochs)
     
+#============================== Target Model Learning Parameters ==============================
+    # Initialise target model
+    target_model = online_model.copy()
+    # EMA schedule, cosine
+    start_tau=0.996
+    end_tau = 1.0
+    taus = cosine_schedule(start_tau, end_tau, num_epochs)
+
 # ============================== Data Handling ==============================
     ss_train_loader, ss_val_loader = get_ss_mnist_loaders(batch_size, device=device)
 
@@ -87,7 +96,7 @@ def train(
     # Log training options, model details, and optimiser details
     if writer is not None:
         writer.add_text('Encoder/options', str(train_options))
-        writer.add_text('Encoder/model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('Encoder/model', str(online_model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
         writer.add_text('Encoder/optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'))
 
     # Initialise training variables
@@ -103,7 +112,8 @@ def train(
 
 # ============================== Training Loop ==============================
     for epoch in range(num_epochs):
-        model.train()
+        online_model.train()
+        target_model.train()
         train_dataset.apply_transform(batch_size=batch_size)
         loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
         loop.set_description(f'Epoch [{epoch}/{num_epochs}]')
@@ -122,17 +132,13 @@ def train(
         epoch_train_losses = torch.zeros(len(train_loader), device=device)
         for i, (images, _) in loop:
             # Sample Action
-            act_p = torch.rand(5) # whether to apply each augmentation
-            angle = torch.rand(1).item() * 360 - 180 if act_p[0] < aug_ps[epoch] else 0
-            translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < aug_ps[epoch] else 0
-            translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] < aug_ps[epoch] else 0
-            scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] < aug_ps[epoch] else 1.0
-            shear = torch.rand(1).item() * 50 - 25 if act_p[4] < aug_ps[epoch] else 0
-            targets = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
-            action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
+            images_aug, action = augment(images, aug_ps[epoch])
 
             with torch.cuda.amp.autocast():
-                preds = model.predict(images, action)
+                with torch.no_grad():
+                    targets = target_model(images_aug, stop_at)
+                    #targets = online_model(images_aug, stop_at)
+                preds = online_model.predict(images, action, stop_at)
 
                 if beta is None:
                     loss = F.mse_loss(preds, targets)
@@ -145,26 +151,27 @@ def train(
             scaler.update()
             optimiser.zero_grad(set_to_none=True)
 
+            # Update target model
+            with torch.no_grad():
+                for o_param, t_param in zip(online_model.parameters(), target_model.parameters()):
+                    t_param.data = taus[epoch] * t_param.data + (1 - taus[epoch]) * o_param.data
+
             epoch_train_losses[i] = loss.detach()
         
         # Validation Pass
-        model.eval()
+        online_model.eval()
+        target_model.eval()
         with torch.no_grad():
             epoch_val_losses = torch.zeros(len(val_loader), device=device)
             for i, (images, _) in enumerate(val_loader):
 
                 # Create Target Image and Action vector
-                act_p = torch.rand(5) # whether to apply each augmentation
-                angle = torch.rand(1).item() * 360 - 180 if act_p[0] < val_aug_ps[epoch] else 0
-                translate_x = torch.randint(-8, 9, (1,)).item() if act_p[1] < val_aug_ps[epoch] else 0
-                translate_y = torch.randint(-8, 9, (1,)).item() if act_p[2] < val_aug_ps[epoch] else 0
-                scale = torch.rand(1).item() * 0.5 + 0.75 if act_p[3] < val_aug_ps[epoch] else 1.0
-                shear = torch.rand(1).item() * 50 - 25 if act_p[4] < val_aug_ps[epoch] else 0
-                targets = F_v2.affine(images, angle=angle, translate=(translate_x, translate_y), scale=scale, shear=shear)
-                action = torch.tensor([angle/180, translate_x/8, translate_y/8, (scale-1.0)/0.25, shear/25], dtype=torch.float32, device=images.device).unsqueeze(0).repeat(images.shape[0], 1)
+                images_aug, action = augment(images, val_aug_ps[epoch])
 
                 with torch.cuda.amp.autocast():
-                    preds = model.predict(images, action)
+                    targets = target_model(images_aug, stop_at)
+                    #targets = online_model(images_aug, stop_at)
+                    preds = online_model.predict(images, action, stop_at)
 
                     if beta is None:
                         loss = F.mse_loss(preds, targets)
@@ -174,7 +181,7 @@ def train(
                 epoch_val_losses[i] = loss.detach()
 
         # single step linear classification eval
-        ss_val_acc, ss_val_loss = single_step_classification_eval(model, ss_train_loader, ss_val_loader, scaler, learn_on_ss)
+        ss_val_acc, ss_val_loss = single_step_classification_eval(online_model, ss_train_loader, ss_val_loader, scaler, learn_on_ss)
         if learn_on_ss:
             scaler.step(optimiser)
             scaler.update()
@@ -191,4 +198,4 @@ def train(
 
         if ss_val_loss < best_val_loss and save_dir is not None and epoch % save_every == 0:
             best_val_loss = ss_val_loss
-            torch.save(model.state_dict(), save_dir)
+            torch.save(online_model.state_dict(), save_dir)

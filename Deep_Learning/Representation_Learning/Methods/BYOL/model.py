@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet18, alexnet
 from rvit import RegisteredVisionTransformer
+from Deep_Learning.Representation_Learning.Utils.nets import mnist_cnn_encoder, mnist_cnn_decoder
 
 class BYOL(nn.Module):
-    def __init__(self, in_features, backbone='alexnet'):
+    def __init__(self, in_features, backbone='mnist_cnn'):
         super().__init__()
         self.in_features = in_features
         self.backbone = backbone
@@ -36,30 +37,8 @@ class BYOL(nn.Module):
             self.encoder.classifier = nn.Flatten()
             self.num_features = 256
         elif backbone == 'mnist_cnn':
-            self.encoder = nn.Sequential(
-                nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.BatchNorm2d(32),
-                nn.ReLU(),
-
-                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.BatchNorm2d(64),
-                nn.ReLU(),
-
-                nn.Conv2d(64, 128, kernel_size=3, stride=1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-
-                nn.Conv2d(128, 256, kernel_size=3, stride=1),
-                nn.BatchNorm2d(256),
-                nn.ReLU(),
-
-                nn.Conv2d(256, 256, kernel_size=3, stride=1),
-                nn.ReLU(),
-                nn.Flatten(),
-            )
             self.num_features = 256
+            self.encoder = mnist_cnn_encoder(self.num_features)
 
 
         self.project = nn.Sequential(
@@ -67,6 +46,11 @@ class BYOL(nn.Module):
             nn.BatchNorm1d(1024),
             nn.ReLU(),
             nn.Linear(1024, 256, bias=False),
+            # nn.Linear(self.num_features, 1024, bias=False),
+            # nn.ReLU(),
+            # nn.Linear(1024, 512, bias=False),
+            # nn.ReLU(),
+            # nn.Linear(512, self.num_features, bias=False)
         )
 
         self.predict = nn.Sequential(
@@ -74,6 +58,11 @@ class BYOL(nn.Module):
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Linear(512, 256, bias=False),
+            # nn.Linear(self.num_features, 1024, bias=False),
+            # nn.ReLU(),
+            # nn.Linear(1024, 512, bias=False),
+            # nn.ReLU(),
+            # nn.Linear(512, self.num_features, bias=False)
         )
 
     def forward(self, x):

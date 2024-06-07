@@ -40,13 +40,15 @@ class QL():
 
     #  S - state, A - action, R - reward, S - state_1, A - action_1
     def train(self, num_episodes):
+        rewards = np.zeros(num_episodes)
         for k in range(num_episodes):
-            state = self.env.reset()
+            state = self.env.reset()[0]
             action = self._select_action(state, k)
 
             done = False
+            ep_reward = 0
             while not done:
-                (state_1, reward, done, _) = self.env.step(action)
+                (state_1, reward, done, _, _) = self.env.step(action)
                 reward -= 0.01
                 if done:
                     reward -= 0.2
@@ -62,8 +64,12 @@ class QL():
 
                 state = state_1
                 action = action_1
+                ep_reward += reward
+            
+            rewards[k] = ep_reward
         
         self._determine_policy()
+        return rewards
 
 
     def act(self, state):
